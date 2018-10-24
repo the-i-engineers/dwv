@@ -602,6 +602,10 @@ dwv.image.View.prototype.getWindowLevelMinMax = function ()
     var min = range.min;
     var max = range.max;
     var width = max - min;
+    // full black / white images, defaults to 1.
+    if ( width < 1 ) {
+        width = 1;
+    }
     var center = min + width/2;
     return new dwv.image.WindowLevel(center, width);
 };
@@ -628,12 +632,13 @@ dwv.image.View.prototype.generateImageData = function( array )
 
     var image = this.getImage();
     var sliceSize = image.getGeometry().getSize().getSliceSize();
-    var sliceOffset = sliceSize * this.getCurrentPosition().k;
-    var frame = (this.getCurrentFrame()) ? this.getCurrentFrame() : 0;
+    var frameOrSliceIndex = (this.getCurrentFrame()) ? this.getCurrentFrame() : this.getCurrentPosition().k;
 
     var index = 0;
     var pxValue = 0;
     var stepPos = 0;
+    var frameBuffer;
+    var arrayBuffer;
 
     var photoInterpretation = image.getPhotometricInterpretation();
     switch (photoInterpretation)
@@ -641,46 +646,48 @@ dwv.image.View.prototype.generateImageData = function( array )
     case "MONOCHROME1":
     case "MONOCHROME2":
         var colourMap = this.getColourMap();
-        var iMax = sliceOffset + sliceSize;
-        for(var i=sliceOffset; i < iMax; ++i)
+        frameBuffer = image.getFrame(frameOrSliceIndex);
+        arrayBuffer = new Uint32Array(array.data.buffer);
+        for(var i=0; i < sliceSize; ++i)
         {
-            pxValue = windowLut.getValue(image.getValueAtOffset(i, frame) );
-            array.data[index] = colourMap.red[pxValue];
-            array.data[index+1] = colourMap.green[pxValue];
-            array.data[index+2] = colourMap.blue[pxValue];
-            array.data[index+3] = 0xff;
-            index += 4;
+            pxValue = windowLut.getValue(frameBuffer[i]);
+            arrayBuffer[index] = 0xff000000 |
+                (colourMap.blue[pxValue] << 16) |
+                (colourMap.green[pxValue] << 8) |
+                colourMap.red[pxValue];
+            index += 1;
         }
         break;
 
     case "RGB":
-        // 3 times bigger...
-        sliceOffset *= 3;
         // the planar configuration defines the memory layout
         var planarConfig = image.getPlanarConfiguration();
         if( planarConfig !== 0 && planarConfig !== 1 ) {
             throw new Error("Unsupported planar configuration: "+planarConfig);
         }
         // default: RGBRGBRGBRGB...
-        var posR = sliceOffset;
-        var posG = sliceOffset + 1;
-        var posB = sliceOffset + 2;
+        var posR = 0;
+        var posG = 1;
+        var posB = 2;
         stepPos = 3;
         // RRRR...GGGG...BBBB...
         if (planarConfig === 1) {
-            posR = sliceOffset;
-            posG = sliceOffset + sliceSize;
-            posB = sliceOffset + 2 * sliceSize;
+            posR = 0;
+            posG = sliceSize;
+            posB = 2 * sliceSize;
             stepPos = 1;
         }
 
+        frameBuffer = image.getFrame(frameOrSliceIndex);
+        arrayBuffer = new Uint32Array(array.data.buffer);
+
         for(var j=0; j < sliceSize; ++j)
         {
-            array.data[index] = windowLut.getValue(image.getValueAtOffset(posR, frame) );
-            array.data[index+1] = windowLut.getValue(image.getValueAtOffset(posG, frame) );
-            array.data[index+2] = windowLut.getValue(image.getValueAtOffset(posB, frame) );
-            array.data[index+3] = 0xff;
-            index += 4;
+            arrayBuffer[index] = 0xff000000 |
+                (windowLut.getValue(frameBuffer[posB]) << 16) |
+                (windowLut.getValue(frameBuffer[posG]) << 8) |
+                windowLut.getValue(frameBuffer[posR])  ;
+            index += 1;
 
             posR += stepPos;
             posG += stepPos;
@@ -694,43 +701,43 @@ dwv.image.View.prototype.generateImageData = function( array )
         // reverse equation:
         // https://en.wikipedia.org/wiki/YCbCr#JPEG_conversion
 
-        // 3 times bigger...
-        sliceOffset *= 3;
         // the planar configuration defines the memory layout
         var planarConfigYBR = image.getPlanarConfiguration();
         if( planarConfigYBR !== 0 && planarConfigYBR !== 1 ) {
             throw new Error("Unsupported planar configuration: "+planarConfigYBR);
         }
         // default: YBRYBRYBR...
-        var posY = sliceOffset;
-        var posCB = sliceOffset + 1;
-        var posCR = sliceOffset + 2;
+        var posY = 0;
+        var posCB = 1;
+        var posCR = 2;
         stepPos = 3;
         // YYYY...BBBB...RRRR...
         if (planarConfigYBR === 1) {
-            posY = sliceOffset;
-            posCB = sliceOffset + sliceSize;
-            posCR = sliceOffset + 2 * sliceSize;
+            posY = 0;
+            posCB = sliceSize;
+            posCR = 2 * sliceSize;
             stepPos = 1;
         }
 
         var y, cb, cr;
         var r, g, b;
+        frameBuffer = image.getFrame(frameOrSliceIndex);
+        arrayBuffer = new Uint32Array(array.data.buffer);
         for (var k=0; k < sliceSize; ++k)
         {
-            y = image.getValueAtOffset(posY, frame);
-            cb = image.getValueAtOffset(posCB, frame);
-            cr = image.getValueAtOffset(posCR, frame);
+            y = frameBuffer[posY];
+            cb = frameBuffer[posCB];
+            cr = frameBuffer[posCR];
 
             r = y + 1.402 * (cr - 128);
             g = y - 0.34414 * (cb - 128) - 0.71414 * (cr - 128);
             b = y + 1.772 * (cb - 128);
 
-            array.data[index] = windowLut.getValue(r);
-            array.data[index+1] = windowLut.getValue(g);
-            array.data[index+2] = windowLut.getValue(b);
-            array.data[index+3] = 0xff;
-            index += 4;
+            arrayBuffer[index] = 0xff000000 |
+                (windowLut.getValue(b) << 16) |
+                (windowLut.getValue(g) << 8) |
+                windowLut.getValue(r)  ;
+            index += 1;
 
             posY += stepPos;
             posCB += stepPos;

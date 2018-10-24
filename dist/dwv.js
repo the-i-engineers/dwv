@@ -1365,14 +1365,8 @@ dwv.App = function ()
      */
     function handleError(error)
     {
-        // alert window
-        if ( error.name && error.message) {
-            alert(error.name+": "+error.message);
-        }
-        else {
-            alert("Error: "+error+".");
-        }
         // log
+        console.error(error);
         if ( error.stack ) {
             console.error(error.stack);
         }
@@ -1388,7 +1382,7 @@ dwv.App = function ()
     function handleAbort(error)
     {
         // log
-        if ( error.message ) {
+        if ( error &&  error.message ) {
             console.warn(error.message);
         }
         else {
@@ -3306,6 +3300,7 @@ dwv.dicom.DicomElementsWrapper.prototype.getElementAsString = function ( dicomEl
     if ( typeof dict[dicomElement.tag.group] !== "undefined" &&
             typeof dict[dicomElement.tag.group][dicomElement.tag.element] !== "undefined") {
         dictElement = dict[dicomElement.tag.group][dicomElement.tag.element];
+
     }
 
     var deSize = dicomElement.value.length;
@@ -3600,6 +3595,313 @@ dwv.dicom = dwv.dicom || {};
  * @return {String} The version of the library.
  */
 dwv.getVersion = function () { return "0.25.2"; };
+
+/**
+ * Clean string: trim and remove ending.
+ * @param {String} inputStr The string to clean.
+ * @return {String} The cleaned string.
+ */
+dwv.dicom.cleanString = function (inputStr)
+{
+    var res = inputStr;
+    if ( inputStr ) {
+        // trim spaces
+        res = inputStr.trim();
+        // get rid of ending zero-width space (u200B)
+        if ( res[res.length-1] === String.fromCharCode("u200B") ) {
+            res = res.substring(0, res.length-1);
+        }
+    }
+    return res;
+};
+
+/**
+ * Is the Native endianness Little Endian.
+ * @type Boolean
+ */
+dwv.dicom.isNativeLittleEndian = function ()
+{
+    return new Int8Array(new Int16Array([1]).buffer)[0] > 0;
+};
+
+/**
+ * Get the utfLabel (used by the TextDecoder) from a character set term
+ * References:
+ * - DICOM [Value Encoding]{@link http://dicom.nema.org/dicom/2013/output/chtml/part05/chapter_6.html}
+ * - DICOM [Specific Character Set]{@link http://dicom.nema.org/dicom/2013/output/chtml/part03/sect_C.12.html#sect_C.12.1.1.2}
+ * - [TextDecoder#Parameters]{@link https://developer.mozilla.org/en-US/docs/Web/API/TextDecoder/TextDecoder#Parameters}
+ */
+dwv.dicom.getUtfLabel = function (charSetTerm)
+{
+    var label = "utf-8";
+    if (charSetTerm === "ISO_IR 100" ) {
+        label = "iso-8859-1";
+    }
+    else if (charSetTerm === "ISO_IR 101" ) {
+        label = "iso-8859-2";
+    }
+    else if (charSetTerm === "ISO_IR 109" ) {
+        label = "iso-8859-3";
+    }
+    else if (charSetTerm === "ISO_IR 110" ) {
+        label = "iso-8859-4";
+    }
+    else if (charSetTerm === "ISO_IR 144" ) {
+        label = "iso-8859-5";
+    }
+    else if (charSetTerm === "ISO_IR 127" ) {
+        label = "iso-8859-6";
+    }
+    else if (charSetTerm === "ISO_IR 126" ) {
+        label = "iso-8859-7";
+    }
+    else if (charSetTerm === "ISO_IR 138" ) {
+        label = "iso-8859-8";
+    }
+    else if (charSetTerm === "ISO_IR 148" ) {
+        label = "iso-8859-9";
+    }
+    else if (charSetTerm === "ISO_IR 13" ) {
+        label = "shift-jis";
+    }
+    else if (charSetTerm === "ISO_IR 166" ) {
+        label = "iso-8859-11";
+    }
+    else if (charSetTerm === "ISO 2022 IR 87" ) {
+        label = "iso-2022-jp";
+    }
+    else if (charSetTerm === "ISO 2022 IR 149" ) {
+        // not supported by TextDecoder when it says it should...
+        //label = "iso-2022-kr";
+    }
+    else if (charSetTerm === "ISO 2022 IR 58") {
+        // not supported by TextDecoder...
+        //label = "iso-2022-cn";
+    }
+    else if (charSetTerm === "ISO_IR 192" ) {
+        label = "utf-8";
+    }
+    else if (charSetTerm === "GB18030" ) {
+        label = "gb18030";
+    }
+    else if (charSetTerm === "GB2312" ) {
+        label = "gb2312";
+    }
+    else if (charSetTerm === "GBK" ) {
+        label = "chinese";
+    }
+    return label;
+};
+
+/**
+ * Data reader.
+ * @constructor
+ * @param {Array} buffer The input array buffer.
+ * @param {Boolean} isLittleEndian Flag to tell if the data is little or big endian.
+ */
+dwv.dicom.DataReader = function (buffer, isLittleEndian)
+{
+    // Set endian flag if not defined.
+    if ( typeof isLittleEndian === 'undefined' ) {
+        isLittleEndian = true;
+    }
+
+    // Default text decoder
+    var defaultTextDecoder = {};
+    defaultTextDecoder.decode = function (buffer) {
+        var result = "";
+        for ( var i = 0, leni = buffer.length; i < leni; ++i ) {
+            result += String.fromCharCode( buffer[ i ] );
+        }
+        return result;
+    };
+    // Text decoder
+    var textDecoder = defaultTextDecoder;
+    if (typeof window.TextDecoder !== "undefined") {
+        textDecoder = new TextDecoder("iso-8859-1");
+    }
+
+
+            // get the item element
+            var itemElement = item.xFFFEE000;
+            message = "(Item with";
+            if ( itemElement.vl === "u/l" ) {
+                message += " undefined";
+            }
+            else {
+                message += " explicit";
+            }
+            message += " length #="+(itemKeys.length - 1)+")";
+            itemElement.value = [message];
+            itemElement.vr = "na";
+
+            line += "\n";
+            line += this.getElementAsString(itemElement, prefix + "  ");
+
+            for ( var m = 0, lenm = itemKeys.length; m < lenm; ++m ) {
+                if ( itemKeys[m] !== "xFFFEE000" ) {
+                    line += "\n";
+                    line += this.getElementAsString(item[itemKeys[m]], prefix + "    ");
+                }
+            }
+
+            message = "(ItemDelimitationItem";
+            if ( itemElement.vl !== "u/l" ) {
+                message += " for re-encoding";
+            }
+            message += ")";
+            var itemDelimElement = {
+                    "tag": { "group": "0xFFFE", "element": "0xE00D" },
+                    "vr": "na",
+                    "vl": "0",
+                    "value": [message]
+                };
+            line += "\n";
+            line += this.getElementAsString(itemDelimElement, prefix + "  ");
+
+        }
+
+        message = "(SequenceDelimitationItem";
+        if ( dicomElement.vl !== "u/l" ) {
+            message += " for re-encod.";
+        }
+        message += ")";
+        var sqDelimElement = {
+                "tag": { "group": "0xFFFE", "element": "0xE0DD" },
+                "vr": "na",
+                "vl": "0",
+                "value": [message]
+            };
+        line += "\n";
+        line += this.getElementAsString(sqDelimElement, prefix);
+    }
+    // pixel sequence
+    else if ( isPixSequence ) {
+        var pixItem = null;
+        for ( var n = 0, lenn = dicomElement.value.length; n < lenn; ++n ) {
+            pixItem = dicomElement.value[n];
+            line += "\n";
+            pixItem.vr = 'pi';
+            line += this.getElementAsString(pixItem, prefix + "  ");
+        }
+
+        var pixDelimElement = {
+                "tag": { "group": "0xFFFE", "element": "0xE0DD" },
+                "vr": "na",
+                "vl": "0",
+                "value": ["(SequenceDelimitationItem)"]
+            };
+        line += "\n";
+        line += this.getElementAsString(pixDelimElement, prefix);
+    }
+
+    return prefix + line;
+};
+
+/**
+ * Get a DICOM Element value from a group and an element.
+ * @param {Number} group The group.
+ * @param {Number} element The element.
+ * @return {Object} The DICOM element value.
+ */
+dwv.dicom.DicomElementsWrapper.prototype.getFromGroupElement = function (
+    group, element )
+{
+   return this.getFromKey(
+       dwv.dicom.getGroupElementKey(group, element) );
+};
+
+/**
+ * Get a DICOM Element value from a tag name.
+ * Uses the DICOM dictionary.
+ * @param {String} name The tag name.
+ * @return {Object} The DICOM element value.
+ */
+dwv.dicom.DicomElementsWrapper.prototype.getFromName = function ( name )
+{
+   var value = null;
+   var tagGE = dwv.dicom.getGroupElementFromName(name);
+   // check that we are not at the end of the dictionary
+   if ( tagGE.group !== null && tagGE.element !== null ) {
+       value = this.getFromKey(dwv.dicom.getGroupElementKey(tagGE.group, tagGE.element));
+   }
+   return value;
+};
+
+/**
+ * Get the file list from a DICOMDIR
+ * @param {Object} data The buffer data of the DICOMDIR
+ * @return {Array} The file list as an array ordered by STUDY > SERIES > IMAGES.
+ */
+dwv.dicom.getFileListFromDicomDir = function (data)
+{
+    // parse file
+    var parser = new dwv.dicom.DicomParser();
+    parser.parse(data);
+    var elements = parser.getRawDicomElements();
+
+    // Directory Record Sequence
+    if ( typeof elements.x00041220 === "undefined" ||
+        typeof elements.x00041220.value === "undefined" ) {
+        console.warn("No Directory Record Sequence found in DICOMDIR.");
+        return;
+    }
+    var dirSeq = elements.x00041220.value;
+
+    if ( dirSeq.length === 0 ) {
+        console.warn("The Directory Record Sequence of the DICOMDIR is empty.");
+        return;
+    }
+
+    var records = [];
+    var series = null;
+    var study = null;
+    for ( var i = 0; i < dirSeq.length; ++i ) {
+        // Directory Record Type
+        if ( typeof dirSeq[i].x00041430 === "undefined" ||
+            typeof dirSeq[i].x00041430.value === "undefined" ) {
+            continue;
+        }
+        var recType = dwv.dicom.cleanString(dirSeq[i].x00041430.value[0]);
+
+        // supposed to come in order...
+        if ( recType === "STUDY" ) {
+            study = [];
+            records.push(study);
+        } else if ( recType === "SERIES" ) {
+            series = [];
+            study.push(series);
+        } else if ( recType === "IMAGE" ) {
+            // Referenced File ID
+            if ( typeof dirSeq[i].x00041500 === "undefined" ||
+                typeof dirSeq[i].x00041500.value === "undefined" ) {
+                continue;
+            }
+            var refFileIds = dirSeq[i].x00041500.value;
+            // clean and join ids
+            var refFileId = "";
+            for ( var j = 0; j < refFileIds.length; ++j ) {
+                if ( j !== 0 ) {
+                    refFileId += '/';
+                }
+                refFileId += dwv.dicom.cleanString(refFileIds[j]);
+            }
+            series.push(refFileId);
+        }
+    }
+    return records;
+};
+
+// namespaces
+var dwv = dwv || {};
+/** @namespace */
+dwv.dicom = dwv.dicom || {};
+
+/**
+ * Get the version of the library.
+ * @return {String} The version of the library.
+ */
+dwv.getVersion = function () { return "0.24.0-beta"; };
 
 /**
  * Clean string: trim and remove ending.
@@ -4579,296 +4881,8 @@ dwv.dicom.DicomParser.prototype.readItemDataElement = function (reader, offset, 
  */
 dwv.dicom.DicomParser.prototype.readPixelItemDataElement = function (reader, offset, implicit)
 {
-    var itemData = [];
 
-    // first item: basic offset table
-    var item = this.readDataElement(reader, offset, implicit);
-    var offsetTableVl = item.vl;
-    offset = item.endOffset;
 
-    // read until the sequence delimitation item
-    var isSeqDelim = false;
-    while (!isSeqDelim) {
-        item = this.readDataElement(reader, offset, implicit);
-        offset = item.endOffset;
-        isSeqDelim = ( item.tag.name === "xFFFEE0DD" );
-        if (!isSeqDelim) {
-            itemData.push(item.value);
-        }
-    }
-
-    return {
-        'data': itemData,
-        'endOffset': offset,
-        'offsetTableVl': offsetTableVl };
-};
-
-/**
- * Read a DICOM data element.
- * Reference: [DICOM VRs]{@link http://dicom.nema.org/dicom/2013/output/chtml/part05/sect_6.2.html#table_6.2-1}.
- * @param {Object} reader The raw data reader.
- * @param {Number} offset The offset where to start to read.
- * @param {Boolean} implicit Is the DICOM VR implicit?
- * @return {Object} An object containing the element 'tag', 'vl', 'vr', 'data' and 'endOffset'.
- */
-dwv.dicom.DicomParser.prototype.readDataElement = function (reader, offset, implicit)
-{
-    // Tag: group, element
-    var tag = this.readTag(reader, offset);
-    offset = tag.endOffset;
-
-    // Value Representation (VR)
-    var vr = null;
-    var is32bitVLVR = false;
-    if (dwv.dicom.isTagWithVR(tag.group, tag.element)) {
-        // implicit VR
-        if (implicit) {
-            vr = "UN";
-            var dict = dwv.dicom.dictionary;
-            if ( typeof dict[tag.group] !== "undefined" &&
-                    typeof dict[tag.group][tag.element] !== "undefined" ) {
-                vr = dwv.dicom.dictionary[tag.group][tag.element][0];
-            }
-            is32bitVLVR = true;
-        }
-        else {
-            vr = reader.readString( offset, 2 );
-            offset += 2 * Uint8Array.BYTES_PER_ELEMENT;
-            is32bitVLVR = dwv.dicom.is32bitVLVR(vr);
-            // reserved 2 bytes
-            if ( is32bitVLVR ) {
-                offset += 2 * Uint8Array.BYTES_PER_ELEMENT;
-            }
-        }
-    }
-    else {
-        vr = "UN";
-        is32bitVLVR = true;
-    }
-
-    // Value Length (VL)
-    var vl = 0;
-    if ( is32bitVLVR ) {
-        vl = reader.readUint32( offset );
-        offset += Uint32Array.BYTES_PER_ELEMENT;
-    }
-    else {
-        vl = reader.readUint16( offset );
-        offset += Uint16Array.BYTES_PER_ELEMENT;
-    }
-
-    // check the value of VL
-    var vlString = vl;
-    if( vl === 0xffffffff ) {
-        vlString = "u/l";
-        vl = 0;
-    }
-
-    var startOffset = offset;
-
-    // data
-    var data = null;
-    var isPixelData = (tag.name === "x7FE00010");
-    // pixel data sequence (implicit)
-    if (isPixelData && vlString === "u/l")
-    {
-        var pixItemData = this.readPixelItemDataElement(reader, offset, implicit);
-        offset = pixItemData.endOffset;
-        startOffset += pixItemData.offsetTableVl;
-        data = pixItemData.data;
-    }
-    else if (isPixelData && (vr === "OB" || vr === "OW" || vr === "OF" || vr === "ox")) {
-        // BitsAllocated
-        var bitsAllocated = 16;
-        if ( typeof this.dicomElements.x00280100 !== 'undefined' ) {
-            bitsAllocated = this.dicomElements.x00280100.value[0];
-        } else {
-            console.warn("Reading DICOM pixel data with default bitsAllocated.");
-        }
-        if (bitsAllocated === 8 && vr === "OW") {
-            console.warn("Reading DICOM pixel data with vr=OW and bitsAllocated=8 (should be 16).");
-        }
-        if (bitsAllocated === 16 && vr === "OB") {
-            console.warn("Reading DICOM pixel data with vr=OB and bitsAllocated=16 (should be 8).");
-        }
-        // PixelRepresentation 0->unsigned, 1->signed
-        var pixelRepresentation = 0;
-        if ( typeof this.dicomElements.x00280103 !== 'undefined' ) {
-            pixelRepresentation = this.dicomElements.x00280103.value[0];
-        }
-        // read
-        if ( bitsAllocated === 8 ) {
-            if (pixelRepresentation === 0) {
-                data = reader.readUint8Array( offset, vl );
-            }
-            else {
-                data = reader.readInt8Array( offset, vl );
-            }
-        }
-        else if ( bitsAllocated === 16 ) {
-            if (pixelRepresentation === 0) {
-                data = reader.readUint16Array( offset, vl );
-            }
-            else {
-                data = reader.readInt16Array( offset, vl );
-            }
-        }
-        else if ( bitsAllocated === 32 ) {
-            if (pixelRepresentation === 0) {
-                data = reader.readUint32Array( offset, vl );
-            }
-            else {
-                data = reader.readInt32Array( offset, vl );
-            }
-        }
-        else if ( bitsAllocated === 64 ) {
-            if (pixelRepresentation === 0) {
-                data = reader.readUint64Array( offset, vl );
-            }
-            else {
-                data = reader.readInt64Array( offset, vl );
-            }
-        }
-        offset += vl;
-    }
-    // others
-    else if ( vr === "OB" )
-    {
-        data = reader.readInt8Array( offset, vl );
-        offset += vl;
-    }
-    else if ( vr === "OW" )
-    {
-        data = reader.readInt16Array( offset, vl );
-        offset += vl;
-    }
-    else if ( vr === "OF" )
-    {
-        data = reader.readInt32Array( offset, vl );
-        offset += vl;
-    }
-    else if ( vr === "OD" )
-    {
-        data = reader.readInt64Array( offset, vl );
-        offset += vl;
-    }
-    // numbers
-    else if( vr === "US")
-    {
-        data = reader.readUint16Array( offset, vl );
-        offset += vl;
-    }
-    else if( vr === "UL")
-    {
-        data = reader.readUint32Array( offset, vl );
-        offset += vl;
-    }
-    else if( vr === "SS")
-    {
-        data = reader.readInt16Array( offset, vl );
-        offset += vl;
-    }
-    else if( vr === "SL")
-    {
-        data = reader.readInt32Array( offset, vl );
-        offset += vl;
-    }
-    else if( vr === "FL")
-    {
-        data = reader.readFloat32Array( offset, vl );
-        offset += vl;
-    }
-    else if( vr === "FD")
-    {
-        data = reader.readFloat64Array( offset, vl );
-        offset += vl;
-    }
-    // attribute
-    else if( vr === "AT")
-    {
-        var raw = reader.readUint16Array( offset, vl );
-        offset += vl;
-        data = [];
-        for ( var i = 0, leni = raw.length; i < leni; i+=2 ) {
-            var stri = raw[i].toString(16);
-            var stri1 = raw[i+1].toString(16);
-            var str = "(";
-            str += "0000".substr(0, 4 - stri.length) + stri.toUpperCase();
-            str += ",";
-            str += "0000".substr(0, 4 - stri1.length) + stri1.toUpperCase();
-            str += ")";
-            data.push(str);
-        }
-    }
-    // not available
-    else if( vr === "UN")
-    {
-        data = reader.readUint8Array( offset, vl );
-        offset += vl;
-    }
-    // sequence
-    else if (vr === "SQ")
-    {
-        data = [];
-        var itemData;
-        // explicit VR sequence
-        if (vlString !== "u/l") {
-            // not empty
-            if (vl !== 0) {
-                var sqEndOffset = offset + vl;
-                while (offset < sqEndOffset) {
-                     itemData = this.readItemDataElement(reader, offset, implicit);
-                     data.push( itemData.data );
-                     offset = itemData.endOffset;
-                }
-            }
-        }
-        // implicit VR sequence
-        else {
-            // read until the sequence delimitation item
-            var isSeqDelim = false;
-            while (!isSeqDelim) {
-                itemData = this.readItemDataElement(reader, offset, implicit);
-                isSeqDelim = itemData.isSeqDelim;
-                offset = itemData.endOffset;
-                // do not store the delimitation item
-                if (!isSeqDelim) {
-                    data.push( itemData.data );
-                }
-            }
-        }
-    }
-    // raw
-    else
-    {
-        if ( vr === "SH" || vr === "LO" || vr === "ST" ||
-            vr === "PN" || vr === "LT" || vr === "UT" ) {
-            data = reader.readSpecialString( offset, vl );
-        } else {
-            data = reader.readString( offset, vl );
-        }
-        offset += vl;
-        data = data.split("\\");
-    }
-
-    // return
-    return {
-        'tag': tag,
-        'vr': vr,
-        'vl': vlString,
-        'value': data,
-        'startOffset': startOffset,
-        'endOffset': offset
-    };
-};
-
-/**
- * Parse the complete DICOM file (given as input to the class).
- * Fills in the member object 'dicomElements'.
- * @param buffer The input array buffer.
- */
-dwv.dicom.DicomParser.prototype.parse = function (buffer)
-{
     var offset = 0;
     var implicit = false;
     // default readers
@@ -13951,11 +13965,12 @@ dwv.image.imageDataToBuffer = function (imageData) {
     // TODO support passing the full image data
     var dataLen = imageData.data.length;
     var buffer = new Uint8Array( (dataLen / 4) * 3);
+    var data = imageData.data;
     var j = 0;
     for( var i = 0; i < dataLen; i+=4 ) {
-        buffer[j] = imageData.data[i];
-        buffer[j+1] = imageData.data[i+1];
-        buffer[j+2] = imageData.data[i+2];
+        buffer[j] = data[i];
+        buffer[j+1] = data[i+1];
+        buffer[j+2] = data[i+2];
         j+=3;
     }
     return buffer;
@@ -14901,8 +14916,8 @@ dwv.image.Image = function(geometry, buffer, numberOfFrames)
     {
         // clone the image buffer
         var clonedBuffer = [];
-        for (var f = 0, lenf = this.getNumberOfFrames(); f < lenf; ++f) {
-            clonedBuffer[f] = buffer[f].slice(0);
+        for (var index = 0; index < buffer.length; ++index) {
+            clonedBuffer[index] = buffer[index].slice(0);
         }
         // create the image copy
         var copy = new dwv.image.Image(this.getGeometry(), clonedBuffer);
@@ -14924,7 +14939,7 @@ dwv.image.Image = function(geometry, buffer, numberOfFrames)
      * @param {Image} The slice to append.
      * @return {Number} The number of the inserted slice.
      */
-    this.appendSlice = function (rhs, frame)
+    this.appendSlice = function (rhs)
     {
         // check input
         if( rhs === null ) {
@@ -14954,48 +14969,23 @@ dwv.image.Image = function(geometry, buffer, numberOfFrames)
             }
         }
 
-        var f = (typeof frame === "undefined") ? 0 : frame;
-
-        // calculate slice size
-        var mul = 1;
-        if( photometricInterpretation === "RGB" || photometricInterpretation === "YBR_FULL_422") {
-            mul = 3;
-        }
-        var sliceSize = mul * size.getSliceSize();
-
-        // create the new buffer
-        var newBuffer = dwv.dicom.getTypedArray(
-            buffer[f].BYTES_PER_ELEMENT * 8,
-            meta.IsSigned ? 1 : 0,
-            sliceSize * (size.getNumberOfSlices() + 1) );
-
         // append slice at new position
         var newSliceNb = geometry.getSliceIndex( rhs.getGeometry().getOrigin() );
-        if( newSliceNb === 0 )
+
+        // move buffer to retain order
+        if( newSliceNb !== size.getNumberOfSlices() )
         {
-            newBuffer.set(rhs.getFrame(f));
-            newBuffer.set(buffer[f], sliceSize);
+            var slices = size.getNumberOfSlices();
+            for(var i = slices; i > newSliceNb; i--){
+                buffer[i] = buffer[i-1];
+            }
         }
-        else if( newSliceNb === size.getNumberOfSlices() )
-        {
-            newBuffer.set(buffer[f]);
-            newBuffer.set(rhs.getFrame(f), size.getNumberOfSlices() * sliceSize);
-        }
-        else
-        {
-            var offset = newSliceNb * sliceSize;
-            newBuffer.set(buffer[f].subarray(0, offset - 1));
-            newBuffer.set(rhs.getFrame(f), offset);
-            newBuffer.set(buffer[f].subarray(offset), offset + sliceSize);
-        }
+        buffer[newSliceNb] = rhs.getFrame(0);
 
         // update geometry
         geometry.appendOrigin( rhs.getGeometry().getOrigin(), newSliceNb );
         // update rsi
         rsis.splice(newSliceNb, 0, rhs.getRescaleSlopeAndIntercept(0));
-
-        // copy to class variables
-        buffer[f] = newBuffer;
 
 		// insert overlay information of the slice to the image
 		overlays.splice(newSliceNb, 0, rhs.getOverlays()[0]);
@@ -15061,9 +15051,9 @@ dwv.image.Image = function(geometry, buffer, numberOfFrames)
  */
 dwv.image.Image.prototype.getValue = function( i, j, k, f )
 {
-    var frame = (f || 0);
     var index = new dwv.math.Index3D(i,j,k);
-    return this.getValueAtOffset( this.getGeometry().indexToOffset(index), frame );
+    var frameOrSliceIndex = (f || index.getK());
+    return this.getValueAtOffset( this.getGeometry().indexToSliceOffset(index), frameOrSliceIndex );
 };
 
 /**
@@ -15092,16 +15082,21 @@ dwv.image.Image.prototype.getRescaledValue = function( i, j, k, f )
  */
 dwv.image.Image.prototype.calculateDataRange = function ()
 {
-    var size = this.getGeometry().getSize().getTotalSize();
-    var nFrames = 1; //this.getNumberOfFrames();
+    var size = this.getGeometry().getSize();
+    var sliceSize = size.getSliceSize();
+    var slices = size.getNumberOfSlices();
     var min = this.getValueAtOffset(0,0);
     var max = min;
     var value = 0;
-    for ( var f = 0; f < nFrames; ++f ) {
-        for ( var i = 0; i < size; ++i ) {
-            value = this.getValueAtOffset(i,f);
-            if( value > max ) { max = value; }
-            if( value < min ) { min = value; }
+    for ( var sliceIndex = 0; sliceIndex < slices; ++sliceIndex ) {
+        for (var sliceOffset = 0; sliceOffset < sliceSize; ++sliceOffset) {
+            value = this.getValueAtOffset(sliceOffset, sliceIndex);
+            if (value > max) {
+                max = value;
+            }
+            if (value < min) {
+                min = value;
+            }
         }
     }
     // return
@@ -15209,17 +15204,13 @@ dwv.image.Image.prototype.convolute2D = function(weights)
     var imgSize = this.getGeometry().getSize();
     var ncols = imgSize.getNumberOfColumns();
     var nrows = imgSize.getNumberOfRows();
-    var nslices = imgSize.getNumberOfSlices();
-    var nframes = this.getNumberOfFrames();
     var ncomp = this.getNumberOfComponents();
 
     // adapt to number of component and planar configuration
     var factor = 1;
     var componentOffset = 1;
-    var frameOffset = imgSize.getTotalSize();
     if( ncomp === 3 )
     {
-        frameOffset *= 3;
         if( this.getPlanarConfiguration() === 0 )
         {
             factor = 3;
@@ -15290,56 +15281,53 @@ dwv.image.Image.prototype.convolute2D = function(weights)
     /*jshint indent:4 */
 
     // loop vars
-    var pixelOffset = 0;
     var newValue = 0;
     var wOffFinal = [];
     // go through the destination image pixels
-    for (var f=0; f<nframes; f++) {
-        pixelOffset = f * frameOffset;
+    for (var frameOrSlice=0; frameOrSlice<newBuffer.length; frameOrSlice++) {
+        var pixelOffset = 0;
         for (var c=0; c<ncomp; c++) {
             // special component offset
             pixelOffset += c * componentOffset;
-            for (var k=0; k<nslices; k++) {
-                for (var j=0; j<nrows; j++) {
-                    for (var i=0; i<ncols; i++) {
-                        wOffFinal = wOff;
-                        // special border cases
-                        if( i === 0 && j === 0 ) {
-                            wOffFinal = wOff00;
-                        }
-                        else if( i === 0 && j === (nrows-1)  ) {
-                            wOffFinal = wOff0n;
-                        }
-                        else if( i === (ncols-1) && j === 0 ) {
-                            wOffFinal = wOffn0;
-                        }
-                        else if( i === (ncols-1) && j === (nrows-1) ) {
-                            wOffFinal = wOffnn;
-                        }
-                        else if( i === 0 && j !== (nrows-1) && j !== 0 ) {
-                            wOffFinal = wOff0x;
-                        }
-                        else if( i === (ncols-1) && j !== (nrows-1) && j !== 0 ) {
-                            wOffFinal = wOffnx;
-                        }
-                        else if( i !== 0 && i !== (ncols-1) && j === 0 ) {
-                            wOffFinal = wOffx0;
-                        }
-                        else if( i !== 0 && i !== (ncols-1) && j === (nrows-1) ) {
-                            wOffFinal = wOffxn;
-                        }
-
-                        // calculate the weighed sum of the source image pixels that
-                        // fall under the convolution matrix
-                        newValue = 0;
-                        for( var wi=0; wi<9; ++wi )
-                        {
-                            newValue += this.getValueAtOffset(pixelOffset + wOffFinal[wi], f) * weights[wi];
-                        }
-                        newBuffer[f][pixelOffset] = newValue;
-                        // increment pixel offset
-                        pixelOffset += factor;
+            for (var j=0; j<nrows; j++) {
+                for (var i=0; i<ncols; i++) {
+                    wOffFinal = wOff;
+                    // special border cases
+                    if( i === 0 && j === 0 ) {
+                        wOffFinal = wOff00;
                     }
+                    else if( i === 0 && j === (nrows-1)  ) {
+                        wOffFinal = wOff0n;
+                    }
+                    else if( i === (ncols-1) && j === 0 ) {
+                        wOffFinal = wOffn0;
+                    }
+                    else if( i === (ncols-1) && j === (nrows-1) ) {
+                        wOffFinal = wOffnn;
+                    }
+                    else if( i === 0 && j !== (nrows-1) && j !== 0 ) {
+                        wOffFinal = wOff0x;
+                    }
+                    else if( i === (ncols-1) && j !== (nrows-1) && j !== 0 ) {
+                        wOffFinal = wOffnx;
+                    }
+                    else if( i !== 0 && i !== (ncols-1) && j === 0 ) {
+                        wOffFinal = wOffx0;
+                    }
+                    else if( i !== 0 && i !== (ncols-1) && j === (nrows-1) ) {
+                        wOffFinal = wOffxn;
+                    }
+
+                    // calculate the weighed sum of the source image pixels that
+                    // fall under the convolution matrix
+                    newValue = 0;
+                    for( var wi=0; wi<9; ++wi )
+                    {
+                        newValue += this.getValueAtOffset(pixelOffset + wOffFinal[wi], frameOrSlice) * weights[wi];
+                    }
+                    newBuffer[frameOrSlice][pixelOffset] = newValue;
+                    // increment pixel offset
+                    pixelOffset += factor;
                 }
             }
         }
@@ -15358,11 +15346,12 @@ dwv.image.Image.prototype.transform = function(operator)
 {
     var newImage = this.clone();
     var newBuffer = newImage.getBuffer();
-    for ( var f = 0, lenf = this.getNumberOfFrames(); f < lenf; ++f )
+
+    for ( var frameOrSlice = 0; frameOrSlice < newBuffer.length; ++frameOrSlice )
     {
-        for( var i = 0, leni = newBuffer[f].length; i < leni; ++i )
+        for( var offset = 0, leni = newBuffer[frameOrSlice].length; offset < leni; ++offset )
         {
-            newBuffer[f][i] = operator( newImage.getValueAtOffset(i,f) );
+            newBuffer[frameOrSlice][offset] = operator( newImage.getValueAtOffset(offset,frameOrSlice) );
         }
     }
     return newImage;
@@ -15380,12 +15369,12 @@ dwv.image.Image.prototype.compose = function(rhs, operator)
 {
     var newImage = this.clone();
     var newBuffer = newImage.getBuffer();
-    for ( var f = 0, lenf = this.getNumberOfFrames(); f < lenf; ++f )
+    for ( var frameOrSlice = 0; frameOrSlice < newBuffer.length; ++frameOrSlice )
     {
-        for( var i = 0, leni = newBuffer[f].length; i < leni; ++i )
+        for( var offset = 0, leni = newBuffer[frameOrSlice].length; offset < leni; ++offset )
         {
             // using the operator on the local buffer, i.e. the latest (not original) data
-            newBuffer[f][i] = Math.floor( operator( this.getValueAtOffset(i,f), rhs.getValueAtOffset(i,f) ) );
+            newBuffer[frameOrSlice][offset] = Math.floor( operator( this.getValueAtOffset(offset,frameOrSlice), rhs.getValueAtOffset(offset,frameOrSlice) ) );
         }
     }
     return newImage;
@@ -16606,6 +16595,10 @@ dwv.image.View.prototype.getWindowLevelMinMax = function ()
     var min = range.min;
     var max = range.max;
     var width = max - min;
+    // full black / white images, defaults to 1.
+    if ( width < 1 ) {
+        width = 1;
+    }
     var center = min + width/2;
     return new dwv.image.WindowLevel(center, width);
 };
@@ -16632,12 +16625,13 @@ dwv.image.View.prototype.generateImageData = function( array )
 
     var image = this.getImage();
     var sliceSize = image.getGeometry().getSize().getSliceSize();
-    var sliceOffset = sliceSize * this.getCurrentPosition().k;
-    var frame = (this.getCurrentFrame()) ? this.getCurrentFrame() : 0;
+    var frameOrSliceIndex = (this.getCurrentFrame()) ? this.getCurrentFrame() : this.getCurrentPosition().k;
 
     var index = 0;
     var pxValue = 0;
     var stepPos = 0;
+    var frameBuffer;
+    var arrayBuffer;
 
     var photoInterpretation = image.getPhotometricInterpretation();
     switch (photoInterpretation)
@@ -16645,8 +16639,9 @@ dwv.image.View.prototype.generateImageData = function( array )
     case "MONOCHROME1":
     case "MONOCHROME2":
         var colourMap = this.getColourMap();
-        var iMax = sliceOffset + sliceSize;
-        for(var i=sliceOffset; i < iMax; ++i)
+        frameBuffer = image.getFrame(frameOrSliceIndex);
+        arrayBuffer = new Uint32Array(array.data.buffer);
+        for(var i=0; i < sliceSize; ++i)
         {
             pxValue = windowLut.getValue(image.getValueAtOffset(i, frame) );
             array.data[index] = colourMap.red[pxValue];
@@ -16658,25 +16653,26 @@ dwv.image.View.prototype.generateImageData = function( array )
         break;
 
     case "RGB":
-        // 3 times bigger...
-        sliceOffset *= 3;
         // the planar configuration defines the memory layout
         var planarConfig = image.getPlanarConfiguration();
         if( planarConfig !== 0 && planarConfig !== 1 ) {
             throw new Error("Unsupported planar configuration: "+planarConfig);
         }
         // default: RGBRGBRGBRGB...
-        var posR = sliceOffset;
-        var posG = sliceOffset + 1;
-        var posB = sliceOffset + 2;
+        var posR = 0;
+        var posG = 1;
+        var posB = 2;
         stepPos = 3;
         // RRRR...GGGG...BBBB...
         if (planarConfig === 1) {
-            posR = sliceOffset;
-            posG = sliceOffset + sliceSize;
-            posB = sliceOffset + 2 * sliceSize;
+            posR = 0;
+            posG = sliceSize;
+            posB = 2 * sliceSize;
             stepPos = 1;
         }
+
+        frameBuffer = image.getFrame(frameOrSliceIndex);
+        arrayBuffer = new Uint32Array(array.data.buffer);
 
         for(var j=0; j < sliceSize; ++j)
         {
@@ -16698,33 +16694,33 @@ dwv.image.View.prototype.generateImageData = function( array )
         // reverse equation:
         // https://en.wikipedia.org/wiki/YCbCr#JPEG_conversion
 
-        // 3 times bigger...
-        sliceOffset *= 3;
         // the planar configuration defines the memory layout
         var planarConfigYBR = image.getPlanarConfiguration();
         if( planarConfigYBR !== 0 && planarConfigYBR !== 1 ) {
             throw new Error("Unsupported planar configuration: "+planarConfigYBR);
         }
         // default: YBRYBRYBR...
-        var posY = sliceOffset;
-        var posCB = sliceOffset + 1;
-        var posCR = sliceOffset + 2;
+        var posY = 0;
+        var posCB = 1;
+        var posCR = 2;
         stepPos = 3;
         // YYYY...BBBB...RRRR...
         if (planarConfigYBR === 1) {
-            posY = sliceOffset;
-            posCB = sliceOffset + sliceSize;
-            posCR = sliceOffset + 2 * sliceSize;
+            posY = 0;
+            posCB = sliceSize;
+            posCR = 2 * sliceSize;
             stepPos = 1;
         }
 
         var y, cb, cr;
         var r, g, b;
+        frameBuffer = image.getFrame(frameOrSliceIndex);
+        arrayBuffer = new Uint32Array(array.data.buffer);
         for (var k=0; k < sliceSize; ++k)
         {
-            y = image.getValueAtOffset(posY, frame);
-            cb = image.getValueAtOffset(posCB, frame);
-            cr = image.getValueAtOffset(posCR, frame);
+            y = frameBuffer[posY];
+            cb = frameBuffer[posCB];
+            cr = frameBuffer[posCR];
 
             r = y + 1.402 * (cr - 128);
             g = y - 0.34414 * (cb - 128) - 0.71414 * (cr - 128);
@@ -17765,6 +17761,12 @@ dwv.io.RawImageLoader = function ()
     var self = this;
 
     /**
+     * if abort is triggered, all image.onload callbacks have to be cancelled
+     * @type {boolean}
+     */
+    var aborted = false;
+
+    /**
      * Set the loader options.
      * @param {Object} opt The input options.
      */
@@ -17803,12 +17805,15 @@ dwv.io.RawImageLoader = function ()
      * @param {Number} index The data index.
      */
     this.load = function ( dataUri, origin, index ) {
+        aborted = false;
         // create a DOM image
         var image = new Image();
         // triggered by ctx.drawImage
         image.onload = function (/*event*/) {
             try {
-                self.onload( dwv.image.getViewFromDOMImage(this) );
+                if(!aborted){
+                    self.onload( dwv.image.getViewFromDOMImage(this) );
+                }
                 self.onloadend();
             } catch (error) {
                 self.onerror(error);
@@ -17826,6 +17831,7 @@ dwv.io.RawImageLoader = function ()
      * Abort load. TODO...
      */
     this.abort = function () {
+        aborted = true;
         self.onabort();
     };
 
@@ -18249,7 +18255,7 @@ dwv.io.UrlsLoader = function ()
         // abort requests
         for ( var i = 0; i < requests.length; ++i ) {
             // 0: UNSENT, 1: OPENED, 2: HEADERS_RECEIVED (send()), 3: LOADING, 4: DONE
-            if ( requests[i].readyState === 2 || requests[i].readyState === 3 ) {
+            if ( requests[i].readyState !== 4 ) {
                 requests[i].abort();
             }
         }

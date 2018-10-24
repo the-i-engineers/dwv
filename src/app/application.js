@@ -624,7 +624,8 @@ dwv.App = function ()
         }
         // flag used by scroll to decide wether to activate or not
         // TODO: supposing multi-slice for zip files, could not be...
-        isMonoSliceData = (data.length === 1 &&
+        var numberOfImages = data.length;
+        isMonoSliceData = (numberOfImages === 1 &&
             firstName.split('.').pop().toLowerCase() !== "zip" &&
             !dwv.utils.endsWith(firstName, "DICOMDIR") &&
             !dwv.utils.endsWith(firstName, ".dcmdir") );
@@ -1306,14 +1307,8 @@ dwv.App = function ()
      */
     function handleError(error)
     {
-        // alert window
-        if ( error.name && error.message) {
-            alert(error.name+": "+error.message);
-        }
-        else {
-            alert("Error: "+error+".");
-        }
         // log
+        console.error(error);
         if ( error.stack ) {
             console.error(error.stack);
         }
@@ -1329,7 +1324,7 @@ dwv.App = function ()
     function handleAbort(error)
     {
         // log
-        if ( error.message ) {
+        if ( error &&  error.message ) {
             console.warn(error.message);
         }
         else {
