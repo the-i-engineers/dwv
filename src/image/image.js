@@ -299,8 +299,8 @@ dwv.image.Image = function(geometry, buffer, numberOfFrames, imageUids)
     {
         // clone the image buffer
         var clonedBuffer = [];
-        for (var f = 0, lenf = this.getNumberOfFrames(); f < lenf; ++f) {
-            clonedBuffer[f] = buffer[f].slice(0);
+        for (var index = 0; index < buffer.length; ++index) {
+            clonedBuffer[index] = buffer[index].slice(0);
         }
         // create the image copy
         var copy = new dwv.image.Image(this.getGeometry(), clonedBuffer);
@@ -322,7 +322,7 @@ dwv.image.Image = function(geometry, buffer, numberOfFrames, imageUids)
      * @param {Image} The slice to append.
      * @return {Number} The number of the inserted slice.
      */
-    this.appendSlice = function (rhs, frame)
+    this.appendSlice = function (rhs)
     {
         // check input
         if( rhs === null ) {
@@ -352,48 +352,23 @@ dwv.image.Image = function(geometry, buffer, numberOfFrames, imageUids)
             }
         }
 
-        var f = (typeof frame === "undefined") ? 0 : frame;
-
-        // calculate slice size
-        var mul = 1;
-        if( photometricInterpretation === "RGB" || photometricInterpretation === "YBR_FULL") {
-            mul = 3;
-        }
-        var sliceSize = mul * size.getSliceSize();
-
-        // create the new buffer
-        var newBuffer = dwv.dicom.getTypedArray(
-            buffer[f].BYTES_PER_ELEMENT * 8,
-            meta.IsSigned ? 1 : 0,
-            sliceSize * (size.getNumberOfSlices() + 1) );
-
         // append slice at new position
         var newSliceNb = geometry.getSliceIndex( rhs.getGeometry().getOrigin() );
-        if( newSliceNb === 0 )
+
+        // move buffer to retain order
+        if( newSliceNb !== size.getNumberOfSlices() )
         {
-            newBuffer.set(rhs.getFrame(f));
-            newBuffer.set(buffer[f], sliceSize);
+            var slices = size.getNumberOfSlices();
+            for(var i = slices; i > newSliceNb; i--){
+                buffer[i] = buffer[i-1];
+            }
         }
-        else if( newSliceNb === size.getNumberOfSlices() )
-        {
-            newBuffer.set(buffer[f]);
-            newBuffer.set(rhs.getFrame(f), size.getNumberOfSlices() * sliceSize);
-        }
-        else
-        {
-            var offset = newSliceNb * sliceSize;
-            newBuffer.set(buffer[f].subarray(0, offset - 1));
-            newBuffer.set(rhs.getFrame(f), offset);
-            newBuffer.set(buffer[f].subarray(offset), offset + sliceSize);
-        }
+        buffer[newSliceNb] = rhs.getFrame(0);
 
         // update geometry
         geometry.appendOrigin( rhs.getGeometry().getOrigin(), newSliceNb );
         // update rsi
         rsis.splice(newSliceNb, 0, rhs.getRescaleSlopeAndIntercept(0));
-
-        // copy to class variables
-        buffer[f] = newBuffer;
 
         // insert sop instance UIDs
         imageUids.splice(newSliceNb, 0, rhs.getImageUids()[0]);
@@ -459,9 +434,9 @@ dwv.image.Image = function(geometry, buffer, numberOfFrames, imageUids)
  */
 dwv.image.Image.prototype.getValue = function( i, j, k, f )
 {
-    var frame = (f || 0);
     var index = new dwv.math.Index3D(i,j,k);
-    return this.getValueAtOffset( this.getGeometry().indexToOffset(index), frame );
+    var frameOrSliceIndex = (f || index.getK());
+    return this.getValueAtOffset( this.getGeometry().indexToSliceOffset(index), frameOrSliceIndex );
 };
 
 /**
@@ -490,14 +465,16 @@ dwv.image.Image.prototype.getRescaledValue = function( i, j, k, f )
  */
 dwv.image.Image.prototype.calculateDataRange = function ()
 {
-    var size = this.getGeometry().getSize().getTotalSize();
-    var nFrames = 1; //this.getNumberOfFrames();
+    var size = this.getGeometry().getSize();
+    var sliceSize = size.getSliceSize();
+    var slices = size.getNumberOfSlices();
+
     var min = this.getValueAtOffset(0,0);
     var max = min;
     var value = 0;
-    for ( var f = 0; f < nFrames; ++f ) {
-        for ( var i = 0; i < size; ++i ) {
-            value = this.getValueAtOffset(i,f);
+    for ( var sliceIndex = 0; sliceIndex < slices; ++sliceIndex ) {
+        for (var sliceOffset = 0; sliceOffset < sliceSize; ++sliceOffset) {
+            value = this.getValueAtOffset(sliceOffset, sliceIndex);
             if( value > max ) { max = value; }
             if( value < min ) { min = value; }
         }
