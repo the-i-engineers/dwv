@@ -12,8 +12,7 @@
 * make a pull-request to merge your branch into master
 # Create new release
 * create a new branch named `release/<version>` (e.g. `release/0.27.0-1`) and push it to Github
-* install gulp and execute `gulp generic-es5`
-* copy package.json into build/generic-es5 and remove all dependencies
+* Build Release 'yarn install' and 'yarn build'
 * login to nexus with `npm --registry="http://dev-repository.tie.local:8081/repository/npm-hosted/" login`
 * move into build/generic-es5 and publish with `npm --registry="http://dev-repository.tie.local:8081/repository/npm-hosted/" publish`
 # Patch an existing release
