@@ -760,13 +760,13 @@ dwv.image.Image.prototype.calculateDataRange = function ()
     var value = 0;
     for ( var sliceIndex = 0; sliceIndex < slices; ++sliceIndex ) {
         for (var sliceOffset = 0; sliceOffset < sliceSize; ++sliceOffset) {
+            value = this.getValueAtOffset(sliceOffset, sliceIndex);
+            if( value > max ) { max = value; }
+            if( value < min ) { min = value; }
+        }
     }
-    if (value < min) {
-      min = value;
-    }
-  }
-  // return
-  return {min: min, max: max};
+    // return
+    return { "min": min, "max": max };
 };
 
 /**
