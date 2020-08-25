@@ -14,7 +14,7 @@
 * create a new branch named `release/<version>` (e.g. `release/0.27.0-1`) and push it to Github
 * Build Release 'yarn install' and 'yarn build'
 * login to nexus with `npm --registry="http://dev-repository.tie.local:8081/repository/npm-hosted/" login`
-* move into build/generic-es5 and publish with `npm --registry="http://dev-repository.tie.local:8081/repository/npm-hosted/" publish`
+* Publish with `npm --registry="http://dev-repository.tie.local:8081/repository/npm-hosted/" publish`
 # Patch an existing release
 * checkout the release-branch you need to patch
 * bump tie-version in [package.json](package.json) (e.g. `0.27.0-1`)
