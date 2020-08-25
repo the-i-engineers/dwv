@@ -257,10 +257,18 @@ dwv.image.Geometry.prototype.equals = function (rhs) {
 };
 
 /**
- * Check that a point is within bounds.
- *
- * @param {dwv.math.Point} point The point to check.
- * @returns {boolean} True if the given coordinates are within bounds.
+ * Convert an index to an current slice offset in memory.
+ * @param {Object} index The index to convert.
+ */
+dwv.image.Geometry.prototype.indexToSliceOffset = function (index) {
+    var size = this.getSize();
+    return index.getI() +
+        index.getJ() * size.getNumberOfColumns();
+};
+
+/**
+ * Convert an index to an offset in memory.
+ * @param {Object} index The index to convert.
  */
 dwv.image.Geometry.prototype.isInBounds = function (point) {
   // get the corresponding index

@@ -9,18 +9,19 @@ dwv.image = dwv.image || {};
  * @returns {Array} The image buffer.
  */
 dwv.image.imageDataToBuffer = function (imageData) {
-  // remove alpha
-  // TODO support passing the full image data
-  var dataLen = imageData.data.length;
-  var buffer = new Uint8Array((dataLen / 4) * 3);
-  var j = 0;
-  for (var i = 0; i < dataLen; i += 4) {
-    buffer[j] = imageData.data[i];
-    buffer[j + 1] = imageData.data[i + 1];
-    buffer[j + 2] = imageData.data[i + 2];
-    j += 3;
-  }
-  return buffer;
+    // remove alpha
+    // TODO support passing the full image data
+    var dataLen = imageData.data.length;
+    var buffer = new Uint8Array( (dataLen / 4) * 3);
+    var data = imageData.data;
+    var j = 0;
+    for( var i = 0; i < dataLen; i+=4 ) {
+        buffer[j] = data[i];
+        buffer[j+1] = data[i+1];
+        buffer[j+2] = data[i+2];
+        j+=3;
+    }
+    return buffer;
 };
 
 /**

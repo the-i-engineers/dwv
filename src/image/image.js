@@ -749,20 +749,17 @@ dwv.image.Image.prototype.getRescaledValueAtOffset = function (offset) {
  *
  * @returns {object} The range {min, max}.
  */
-dwv.image.Image.prototype.calculateDataRange = function () {
-  var min = this.getValueAtOffset(0);
-  var max = min;
-  var value = 0;
-  var size = this.getGeometry().getSize();
-  var leni = size.getTotalSize();
-  // max to 3D
-  if (size.length() >= 3) {
-    leni = size.getDimSize(3);
-  }
-  for (var i = 0; i < leni; ++i) {
-    value = this.getValueAtOffset(i);
-    if (value > max) {
-      max = value;
+dwv.image.Image.prototype.calculateDataRange = function ()
+{
+    var size = this.getGeometry().getSize();
+    var sliceSize = size.getSliceSize();
+    var slices = size.getNumberOfSlices();
+
+    var min = this.getValueAtOffset(0,0);
+    var max = min;
+    var value = 0;
+    for ( var sliceIndex = 0; sliceIndex < slices; ++sliceIndex ) {
+        for (var sliceOffset = 0; sliceOffset < sliceSize; ++sliceOffset) {
     }
     if (value < min) {
       min = value;
