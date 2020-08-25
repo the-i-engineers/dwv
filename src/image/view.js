@@ -632,52 +632,163 @@ dwv.image.View.prototype.setWindowLevelMinMax = function () {
  *
  * @param {Array} array The array to fill in.
  */
-dwv.image.View.prototype.generateImageData = function (array) {
-  var frame = (this.getCurrentFrame()) ? this.getCurrentFrame() : 0;
-  var image = this.getImage();
-  var photoInterpretation = image.getPhotometricInterpretation();
-  switch (photoInterpretation) {
-  case 'MONOCHROME1':
-  case 'MONOCHROME2':
-    dwv.image.generateImageDataMonochrome(
-      array,
-      image,
-      this.getCurrentPosition(),
-      frame,
-      this.getCurrentWindowLut(),
-      this.getColourMap());
-    break;
+dwv.image.View.prototype.generateImageData = function( array )
+{
+    var windowLut = this.getCurrentWindowLut();
 
-  case 'PALETTE COLOR':
-    dwv.image.generateImageDataPaletteColor(
-      array,
-      image,
-      this.getCurrentPosition(),
-      frame,
-      this.getColourMap());
-    break;
+    var image = this.getImage();
+    var sliceSize = image.getGeometry().getSize().getSliceSize();
+    var sliceOffset = sliceSize * this.getCurrentPosition().k;
+    var frameOrSliceIndex = (this.getCurrentFrame()) ? this.getCurrentFrame() : this.getCurrentPosition().k;
 
-  case 'RGB':
-    dwv.image.generateImageDataRgb(
-      array,
-      image,
-      this.getCurrentPosition(),
-      frame,
-      this.getCurrentWindowLut());
-    break;
+    var index = 0;
+    var pxValue = 0;
+    var stepPos = 0;
+    var colourMap = null;
+    var frameBuffer;
+    var arrayBuffer;
 
-  case 'YBR_FULL':
-    dwv.image.generateImageDataYbrFull(
-      array,
-      image,
-      this.getCurrentPosition(),
-      frame);
-    break;
+    var photoInterpretation = image.getPhotometricInterpretation();
+    switch (photoInterpretation)
+    {
+    case "MONOCHROME1":
+    case "MONOCHROME2":
+        colourMap = this.getColourMap();
+        frameBuffer = image.getFrame(frameOrSliceIndex);
+        arrayBuffer = new Uint32Array(array.data.buffer);
+        for(var i=0; i < sliceSize; ++i)
+        {
+            pxValue = windowLut.getValue(frameBuffer[i]);
+            arrayBuffer[index] = 0xff000000 |
+                (colourMap.blue[pxValue] << 16) |
+                (colourMap.green[pxValue] << 8) |
+                colourMap.red[pxValue];
+            index += 1;
+        }
+        break;
 
-  default:
-    throw new Error(
-      'Unsupported photometric interpretation: ' + photoInterpretation);
-  }
+    case "PALETTE COLOR":
+        colourMap = this.getColourMap();
+        var lMax = sliceOffset + sliceSize;
+
+        var to8 = function (value) {
+            return value >> 8;
+        };
+
+        if (image.getMeta().BitsStored === 16) {
+            console.log("Scaling 16bits data to 8bits.");
+        }
+
+        for (var l = sliceOffset; l < lMax; ++l)
+        {
+            pxValue = image.getValueAtOffset(l, frame);
+
+            // TODO check pxValue fits in lut
+
+            if (image.getMeta().BitsStored === 16) {
+                array.data[index] = to8(colourMap.red[pxValue]);
+                array.data[index+1] = to8(colourMap.green[pxValue]);
+                array.data[index+2] = to8(colourMap.blue[pxValue]);
+            } else {
+                array.data[index] = colourMap.red[pxValue];
+                array.data[index+1] = colourMap.green[pxValue];
+                array.data[index+2] = colourMap.blue[pxValue];
+            }
+            array.data[index+3] = 0xff;
+            index += 4;
+        }
+        break;
+
+    case "RGB":
+        // the planar configuration defines the memory layout
+        var planarConfig = image.getPlanarConfiguration();
+        if( planarConfig !== 0 && planarConfig !== 1 ) {
+            throw new Error("Unsupported planar configuration: "+planarConfig);
+        }
+        // default: RGBRGBRGBRGB...
+        var posR = 0;
+        var posG = 1;
+        var posB = 2;
+        stepPos = 3;
+        // RRRR...GGGG...BBBB...
+        if (planarConfig === 1) {
+            posR = 0;
+            posG = sliceSize;
+            posB = 2 * sliceSize;
+            stepPos = 1;
+        }
+
+        frameBuffer = image.getFrame(frameOrSliceIndex);
+        arrayBuffer = new Uint32Array(array.data.buffer);
+
+        for(var j=0; j < sliceSize; ++j)
+        {
+            arrayBuffer[index] = 0xff000000 |
+                (windowLut.getValue(frameBuffer[posB]) << 16) |
+                (windowLut.getValue(frameBuffer[posG]) << 8) |
+                windowLut.getValue(frameBuffer[posR])  ;
+            index += 1;
+
+            posR += stepPos;
+            posG += stepPos;
+            posB += stepPos;
+        }
+        break;
+
+    case "YBR_FULL":
+        // theory:
+        // http://dicom.nema.org/dicom/2013/output/chtml/part03/sect_C.7.html#sect_C.7.6.3.1.2
+        // reverse equation:
+        // https://en.wikipedia.org/wiki/YCbCr#JPEG_conversion
+
+
+        // the planar configuration defines the memory layout
+        var planarConfigYBR = image.getPlanarConfiguration();
+        if( planarConfigYBR !== 0 && planarConfigYBR !== 1 ) {
+            throw new Error("Unsupported planar configuration: "+planarConfigYBR);
+        }
+        // default: YBRYBRYBR...
+        var posY = 0;
+        var posCB = 1;
+        var posCR = 2;
+        stepPos = 3;
+        // YYYY...BBBB...RRRR...
+        if (planarConfigYBR === 1) {
+            posY = 0;
+            posCB = sliceSize;
+            posCR = 2 * sliceSize;
+            stepPos = 1;
+        }
+
+        var y, cb, cr;
+        var r, g, b;
+        frameBuffer = image.getFrame(frameOrSliceIndex);
+        arrayBuffer = new Uint32Array(array.data.buffer);
+        for (var k=0; k < sliceSize; ++k)
+        {
+            y = frameBuffer[posY];
+            cb = frameBuffer[posCB];
+            cr = frameBuffer[posCR];
+
+            r = y + 1.402 * (cr - 128);
+            g = y - 0.34414 * (cb - 128) - 0.71414 * (cr - 128);
+            b = y + 1.772 * (cb - 128);
+
+            arrayBuffer[index] = 0xff000000 |
+                (windowLut.getValue(b) << 16) |
+                (windowLut.getValue(g) << 8) |
+                windowLut.getValue(r)  ;
+            index += 4;
+
+            posY += stepPos;
+            posCB += stepPos;
+            posCR += stepPos;
+        }
+        break;
+
+    default:
+        throw new Error("Unsupported photometric interpretation: "+photoInterpretation);
+    }
 };
 
 /**

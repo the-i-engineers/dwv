@@ -390,7 +390,7 @@ dwv.io.UrlsLoader = function () {
     }
 
     // launch requests in batch
-    var batchSize = requests.length;
+    var batchSize = 10;
     if (typeof options !== 'undefined') {
       // optional request batch size
       if (typeof options.batchSize !== 'undefined' && batchSize !== 0) {
