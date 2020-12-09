@@ -14,7 +14,7 @@
     "type": "git",
     "url": "git://github.com/ivmartel/dwv.git"
   },
-  "main": "dist/dwv.min.js",
+  "main": "build/dist/dwv.min.js",
   "dependencies": {
     "i18next": "~12.1.0",
     "i18next-browser-languagedetector": "~3.0.0",
