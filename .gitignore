@@ -8,4 +8,6 @@ build
 # misc
 npm-debug.log
 yarn-error.log
-package-lock.json
+
+# IDE
+/.idea

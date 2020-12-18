@@ -132,9 +132,6 @@ dwv.dicom.DataReader = function (buffer, isLittleEndian) {
   };
   // Text decoder
   var textDecoder = defaultTextDecoder;
-  if (window && typeof window.TextDecoder !== 'undefined') {
-    textDecoder = new TextDecoder('iso-8859-1');
-  }
 
   /**
    * Set the utfLabel used to construct the TextDecoder.
@@ -142,9 +139,6 @@ dwv.dicom.DataReader = function (buffer, isLittleEndian) {
    * @param {string} label The encoding label.
    */
   this.setUtfLabel = function (label) {
-    if (window && typeof window.TextDecoder !== 'undefined') {
-      textDecoder = new TextDecoder(label);
-    }
   };
 
   /**
@@ -258,8 +252,8 @@ dwv.dicom.DataReader = function (buffer, isLittleEndian) {
       data = new Uint16Array(arraySize);
       for (var i = 0; i < arraySize; ++i) {
         data[i] = view.getUint16((byteOffset +
-                    Uint16Array.BYTES_PER_ELEMENT * i),
-        isLittleEndian);
+            Uint16Array.BYTES_PER_ELEMENT * i),
+            isLittleEndian);
       }
     }
     return data;
@@ -284,8 +278,8 @@ dwv.dicom.DataReader = function (buffer, isLittleEndian) {
       data = new Int16Array(arraySize);
       for (var i = 0; i < arraySize; ++i) {
         data[i] = view.getInt16((byteOffset +
-                    Int16Array.BYTES_PER_ELEMENT * i),
-        isLittleEndian);
+            Int16Array.BYTES_PER_ELEMENT * i),
+            isLittleEndian);
       }
     }
     return data;
@@ -310,8 +304,8 @@ dwv.dicom.DataReader = function (buffer, isLittleEndian) {
       data = new Uint32Array(arraySize);
       for (var i = 0; i < arraySize; ++i) {
         data[i] = view.getUint32((byteOffset +
-                    Uint32Array.BYTES_PER_ELEMENT * i),
-        isLittleEndian);
+            Uint32Array.BYTES_PER_ELEMENT * i),
+            isLittleEndian);
       }
     }
     return data;
@@ -336,8 +330,8 @@ dwv.dicom.DataReader = function (buffer, isLittleEndian) {
       data = new Int32Array(arraySize);
       for (var i = 0; i < arraySize; ++i) {
         data[i] = view.getInt32((byteOffset +
-                    Int32Array.BYTES_PER_ELEMENT * i),
-        isLittleEndian);
+            Int32Array.BYTES_PER_ELEMENT * i),
+            isLittleEndian);
       }
     }
     return data;
@@ -362,8 +356,8 @@ dwv.dicom.DataReader = function (buffer, isLittleEndian) {
       data = new Float32Array(arraySize);
       for (var i = 0; i < arraySize; ++i) {
         data[i] = view.getFloat32((byteOffset +
-                    Float32Array.BYTES_PER_ELEMENT * i),
-        isLittleEndian);
+            Float32Array.BYTES_PER_ELEMENT * i),
+            isLittleEndian);
       }
     }
     return data;
@@ -388,8 +382,8 @@ dwv.dicom.DataReader = function (buffer, isLittleEndian) {
       data = new Float64Array(arraySize);
       for (var i = 0; i < arraySize; ++i) {
         data[i] = view.getFloat64((byteOffset +
-                    Float64Array.BYTES_PER_ELEMENT * i),
-        isLittleEndian);
+            Float64Array.BYTES_PER_ELEMENT * i),
+            isLittleEndian);
       }
     }
     return data;
@@ -448,17 +442,17 @@ dwv.dicom.getGroupElementFromName = function (tagName) {
   var keys1 = null;
   // label for nested loop break
   outLabel:
-  // search through dictionary
-  for (var k0 = 0, lenK0 = keys0.length; k0 < lenK0; ++k0) {
-    group = keys0[k0];
-    keys1 = Object.keys(dict[group]);
-    for (var k1 = 0, lenK1 = keys1.length; k1 < lenK1; ++k1) {
-      element = keys1[k1];
-      if (dict[group][element][2] === tagName) {
-        break outLabel;
+      // search through dictionary
+      for (var k0 = 0, lenK0 = keys0.length; k0 < lenK0; ++k0) {
+        group = keys0[k0];
+        keys1 = Object.keys(dict[group]);
+        for (var k1 = 0, lenK1 = keys1.length; k1 < lenK1; ++k1) {
+          element = keys1[k1];
+          if (dict[group][element][2] === tagName) {
+            break outLabel;
+          }
+        }
       }
-    }
-  }
   return {'group': group, 'element': element};
 };
 
@@ -496,8 +490,8 @@ dwv.dicom.Tag = function (group, element) {
  */
 dwv.dicom.Tag.prototype.equals = function (rhs) {
   return rhs !== null &&
-        this.getGroup() === rhs.getGroup() &&
-        this.getElement() === rhs.getElement();
+      this.getGroup() === rhs.getGroup() &&
+      this.getElement() === rhs.getElement();
 };
 
 /**
@@ -508,8 +502,8 @@ dwv.dicom.Tag.prototype.equals = function (rhs) {
  */
 dwv.dicom.Tag.prototype.equals2 = function (rhs) {
   if (rhs === null ||
-        typeof rhs.group === 'undefined' ||
-        typeof rhs.element === 'undefined') {
+      typeof rhs.group === 'undefined' ||
+      typeof rhs.element === 'undefined') {
     return false;
   }
   return this.equals(new dwv.dicom.Tag(rhs.group, rhs.element));
@@ -617,7 +611,7 @@ dwv.dicom.isBigEndianTransferSyntax = function (syntax) {
  */
 dwv.dicom.isJpegBaselineTransferSyntax = function (syntax) {
   return syntax === '1.2.840.10008.1.2.4.50' ||
-        syntax === '1.2.840.10008.1.2.4.51';
+      syntax === '1.2.840.10008.1.2.4.51';
 };
 
 /**
@@ -628,9 +622,9 @@ dwv.dicom.isJpegBaselineTransferSyntax = function (syntax) {
  */
 dwv.dicom.isJpegRetiredTransferSyntax = function (syntax) {
   return (syntax.match(/1.2.840.10008.1.2.4.5/) !== null &&
-        !dwv.dicom.isJpegBaselineTransferSyntax() &&
-        !dwv.dicom.isJpegLosslessTransferSyntax()) ||
-        syntax.match(/1.2.840.10008.1.2.4.6/) !== null;
+      !dwv.dicom.isJpegBaselineTransferSyntax() &&
+      !dwv.dicom.isJpegLosslessTransferSyntax()) ||
+      syntax.match(/1.2.840.10008.1.2.4.6/) !== null;
 };
 
 /**
@@ -641,7 +635,7 @@ dwv.dicom.isJpegRetiredTransferSyntax = function (syntax) {
  */
 dwv.dicom.isJpegLosslessTransferSyntax = function (syntax) {
   return syntax === '1.2.840.10008.1.2.4.57' ||
-        syntax === '1.2.840.10008.1.2.4.70';
+      syntax === '1.2.840.10008.1.2.4.70';
 };
 
 /**
@@ -709,12 +703,12 @@ dwv.dicom.isReadSupportedTransferSyntax = function (syntax) {
   // dwv.dicom.isJpeglsTransferSyntax(syntax): JPEG-LS
 
   return (syntax === '1.2.840.10008.1.2' || // Implicit VR - Little Endian
-        syntax === '1.2.840.10008.1.2.1' || // Explicit VR - Little Endian
-        syntax === '1.2.840.10008.1.2.2' || // Explicit VR - Big Endian
-        dwv.dicom.isJpegBaselineTransferSyntax(syntax) || // JPEG baseline
-        dwv.dicom.isJpegLosslessTransferSyntax(syntax) || // JPEG Lossless
-        dwv.dicom.isJpeg2000TransferSyntax(syntax) || // JPEG 2000
-        dwv.dicom.isRleTransferSyntax(syntax)); // RLE
+      syntax === '1.2.840.10008.1.2.1' || // Explicit VR - Little Endian
+      syntax === '1.2.840.10008.1.2.2' || // Explicit VR - Big Endian
+      dwv.dicom.isJpegBaselineTransferSyntax(syntax) || // JPEG baseline
+      dwv.dicom.isJpegLosslessTransferSyntax(syntax) || // JPEG Lossless
+      dwv.dicom.isJpeg2000TransferSyntax(syntax) || // JPEG 2000
+      dwv.dicom.isRleTransferSyntax(syntax)); // RLE
 };
 
 /**
@@ -820,12 +814,12 @@ dwv.dicom.getTypedArray = function (bitsAllocated, pixelRepresentation, size) {
 dwv.dicom.is32bitVLVR = function (vr) {
   // added locally used 'ox'
   return (vr === 'OB' ||
-    vr === 'OW' ||
-    vr === 'OF' ||
-    vr === 'ox' ||
-    vr === 'UT' ||
-    vr === 'SQ' ||
-    vr === 'UN');
+      vr === 'OW' ||
+      vr === 'OF' ||
+      vr === 'ox' ||
+      vr === 'UT' ||
+      vr === 'SQ' ||
+      vr === 'UN');
 };
 
 /**
@@ -838,7 +832,7 @@ dwv.dicom.is32bitVLVR = function (vr) {
  */
 dwv.dicom.isTagWithVR = function (group, element) {
   return !(group === '0xFFFE' &&
-    (element === '0xE000' || element === '0xE00D' || element === '0xE0DD')
+      (element === '0xE000' || element === '0xE00D' || element === '0xE0DD')
   );
 };
 
@@ -960,7 +954,7 @@ dwv.dicom.DicomParser.prototype.readTag = function (reader, offset) {
  * @returns {object} The item data as a list of data elements.
  */
 dwv.dicom.DicomParser.prototype.readItemDataElement = function (
-  reader, offset, implicit) {
+    reader, offset, implicit) {
   var itemData = {};
 
   // read the first item
@@ -1020,7 +1014,7 @@ dwv.dicom.DicomParser.prototype.readItemDataElement = function (
  * @returns {Array} The item data as an array of data elements.
  */
 dwv.dicom.DicomParser.prototype.readPixelItemDataElement = function (
-  reader, offset, implicit) {
+    reader, offset, implicit) {
   var itemData = [];
 
   // first item: basic offset table
@@ -1055,7 +1049,7 @@ dwv.dicom.DicomParser.prototype.readPixelItemDataElement = function (
  *   'tag', 'vl', 'vr', 'data' and 'endOffset'.
  */
 dwv.dicom.DicomParser.prototype.readDataElement = function (
-  reader, offset, implicit) {
+    reader, offset, implicit) {
   // Tag: group, element
   var tag = this.readTag(reader, offset);
   offset = tag.endOffset;
@@ -1069,7 +1063,7 @@ dwv.dicom.DicomParser.prototype.readDataElement = function (
       vr = 'UN';
       var dict = dwv.dicom.dictionary;
       if (typeof dict[tag.group] !== 'undefined' &&
-                    typeof dict[tag.group][tag.element] !== 'undefined') {
+          typeof dict[tag.group][tag.element] !== 'undefined') {
         vr = dwv.dicom.dictionary[tag.group][tag.element][0];
       }
       is32bitVLVR = true;
@@ -1121,7 +1115,7 @@ dwv.dicom.DicomParser.prototype.readDataElement = function (
     startOffset += pixItemData.offsetTableVl;
     data = pixItemData.data;
   } else if (isPixelData &&
-    (vr === 'OB' || vr === 'OW' || vr === 'OF' || vr === 'ox')) {
+      (vr === 'OB' || vr === 'OW' || vr === 'OF' || vr === 'ox')) {
     // BitsAllocated
     var bitsAllocated = 16;
     if (typeof this.dicomElements.x00280100 !== 'undefined') {
@@ -1131,13 +1125,13 @@ dwv.dicom.DicomParser.prototype.readDataElement = function (
     }
     if (bitsAllocated === 8 && vr === 'OW') {
       console.warn(
-        'Reading DICOM pixel data with vr=OW' +
+          'Reading DICOM pixel data with vr=OW' +
           'and bitsAllocated=8 (should be 16).'
       );
     }
     if (bitsAllocated === 16 && vr === 'OB') {
       console.warn(
-        'Reading DICOM pixel data with vr=OB' +
+          'Reading DICOM pixel data with vr=OB' +
           'and bitsAllocated=16 (should be 8).'
       );
     }
@@ -1147,7 +1141,7 @@ dwv.dicom.DicomParser.prototype.readDataElement = function (
       pixelRepresentation = this.dicomElements.x00280103.value[0];
     } else {
       console.warn(
-        'Reading DICOM pixel data with default pixelRepresentation.'
+          'Reading DICOM pixel data with default pixelRepresentation.'
       );
     }
     // read
@@ -1214,7 +1208,7 @@ dwv.dicom.DicomParser.prototype.readDataElement = function (
       pixelRep = this.dicomElements.x00280103.value[0];
     } else {
       console.warn(
-        'Reading DICOM pixel data with default pixelRepresentation.');
+          'Reading DICOM pixel data with default pixelRepresentation.');
     }
     // read
     if (pixelRep === 0) {
@@ -1274,7 +1268,7 @@ dwv.dicom.DicomParser.prototype.readDataElement = function (
   } else {
     // raw
     if (vr === 'SH' || vr === 'LO' || vr === 'ST' ||
-            vr === 'PN' || vr === 'LT' || vr === 'UT') {
+        vr === 'PN' || vr === 'LT' || vr === 'UT') {
       data = reader.readSpecialString(offset, vl);
     } else {
       data = reader.readString(offset, vl);
@@ -1341,9 +1335,9 @@ dwv.dicom.DicomParser.prototype.parse = function (buffer) {
     dataElement = this.readDataElement(dataReader, 0, implicit);
     // check that group is 0x0008
     if ((dataElement.tag.group !== oEightGroupBigEndian) &&
-            (dataElement.tag.group !== oEightGroupLittleEndian)) {
+        (dataElement.tag.group !== oEightGroupLittleEndian)) {
       throw new Error(
-        'Not a valid DICOM file (no magic DICM word found' +
+          'Not a valid DICOM file (no magic DICM word found' +
           'and first element not in 0x0008 group)'
       );
     }
@@ -1351,7 +1345,7 @@ dwv.dicom.DicomParser.prototype.parse = function (buffer) {
     var vr0 = dataElement.vr.charCodeAt(0);
     var vr1 = dataElement.vr.charCodeAt(1);
     implicit = (vr0 >= 65 && vr0 <= 90 && vr1 >= 65 && vr1 <= 90)
-      ? false : true;
+        ? false : true;
     // guess transfer syntax
     if (dataElement.tag.group === oEightGroupLittleEndian) {
       if (implicit) {
@@ -1365,8 +1359,8 @@ dwv.dicom.DicomParser.prototype.parse = function (buffer) {
       if (implicit) {
         // ImplicitVRBigEndian: impossible
         throw new Error(
-          'Not a valid DICOM file (no magic DICM word found' +
-          'and implicit VR big endian detected)'
+            'Not a valid DICOM file (no magic DICM word found' +
+            'and implicit VR big endian detected)'
         );
       } else {
         // ExplicitVRBigEndian
@@ -1398,7 +1392,7 @@ dwv.dicom.DicomParser.prototype.parse = function (buffer) {
   // check support
   if (!dwv.dicom.isReadSupportedTransferSyntax(syntax)) {
     throw new Error('Unsupported DICOM transfer syntax: \'' + syntax +
-            '\' (' + dwv.dicom.getTransferSyntaxName(syntax) + ')');
+        '\' (' + dwv.dicom.getTransferSyntaxName(syntax) + ')');
   }
 
   // Implicit VR
@@ -1428,7 +1422,7 @@ dwv.dicom.DicomParser.prototype.parse = function (buffer) {
       } else {
         charSetTerm = dwv.dicom.cleanString(dataElement.value[1]);
         console.warn('Unsupported character set with code extensions: \'' +
-          charSetTerm + '\'.');
+            charSetTerm + '\'.');
       }
       dataReader.setUtfLabel(dwv.dicom.getUtfLabel(charSetTerm));
     }
@@ -1445,7 +1439,7 @@ dwv.dicom.DicomParser.prototype.parse = function (buffer) {
   // safety check...
   if (buffer.byteLength !== offset) {
     console.warn('Did not reach the end of the buffer: ' +
-            offset + ' != ' + buffer.byteLength);
+        offset + ' != ' + buffer.byteLength);
   }
 
   // pixel buffer
@@ -1454,21 +1448,21 @@ dwv.dicom.DicomParser.prototype.parse = function (buffer) {
     var numberOfFrames = 1;
     if (typeof this.dicomElements.x00280008 !== 'undefined') {
       numberOfFrames = dwv.dicom.cleanString(
-        this.dicomElements.x00280008.value[0]);
+          this.dicomElements.x00280008.value[0]);
     }
 
     if (this.dicomElements.x7FE00010.vl !== 'u/l') {
       // compressed should be encapsulated...
       if (dwv.dicom.isJpeg2000TransferSyntax(syntax) ||
-                dwv.dicom.isJpegBaselineTransferSyntax(syntax) ||
-                dwv.dicom.isJpegLosslessTransferSyntax(syntax)) {
+          dwv.dicom.isJpegBaselineTransferSyntax(syntax) ||
+          dwv.dicom.isJpegLosslessTransferSyntax(syntax)) {
         console.warn('Compressed but no items...');
       }
 
       // calculate the slice size
       var pixData = this.dicomElements.x7FE00010.value;
       if (pixData && typeof pixData !== 'undefined' &&
-                pixData.length !== 0) {
+          pixData.length !== 0) {
         if (typeof this.dicomElements.x00280010 === 'undefined') {
           throw new Error('Missing image number of rows.');
         }
