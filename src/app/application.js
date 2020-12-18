@@ -1074,7 +1074,7 @@ dwv.App = function ()
             } else {
                 view.append(event.data.view);
             }
-            updateMetaData(event.data.info);
+            // updateMetaData(event.data.info); // too costly
             eventMetaData = event.data.info;
         } else if (event.loadtype === "state") {
             var state = new dwv.State();

@@ -284,7 +284,9 @@ dwv.image.View = function (image)
 
         // update in case of wl change
         // TODO: should not be run in a getter...
-        wlut.update();
+        if ( wlut ) {
+          wlut.update();
+        }
 
         // return
         return wlut;
