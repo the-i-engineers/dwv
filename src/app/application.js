@@ -1206,7 +1206,7 @@ dwv.App = function () {
         // append slice
         sliceNb = image.appendSlice(event.data.image);
       }
-      updateMetaData(event.data.info);
+      // updateMetaData(event.data.info); - too costly
       eventMetaData = event.data.info;
     } else if (event.loadtype === 'state') {
       var state = new dwv.State();
