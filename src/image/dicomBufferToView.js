@@ -11,6 +11,8 @@ dwv.image.DicomBufferToView = function () {
   // closure to self
   var self = this;
 
+  var asyncThreadPool;
+
   /**
    * The default character set (optional).
    *
@@ -48,7 +50,15 @@ dwv.image.DicomBufferToView = function () {
     self.onloadstart({
       source: origin
     });
+    if (typeof dwv.image.decoderScripts !== 'undefined' &&
+      typeof dwv.image.decoderScripts['dicom'] !== 'undefined') {
+      self.convertAsync(buffer, origin, dataIndex);
+    } else {
+      self.convertSync(buffer, origin, dataIndex);
+    }
+  }
 
+  this.convertSync = function (buffer, origin, dataIndex) {
     // DICOM parser
     var dicomParser = new dwv.dicom.DicomParser();
     dicomParser.setDefaultCharacterSet(defaultCharacterSet);
@@ -65,14 +75,49 @@ dwv.image.DicomBufferToView = function () {
       });
       return;
     }
+    self.convertParsed(dicomParser.getRawDicomElements(), origin, dataIndex);
+  }
 
-    var tmpBuffer = dicomParser.getRawDicomElements().x7FE00010.value;
+  this.convertAsync = function (buffer, origin, dataIndex) {
+    if(typeof asyncThreadPool === 'undefined') {
+      asyncThreadPool = new dwv.utils.ThreadPool(8);
+    }
+
+    asyncThreadPool.onworkitem = function (result) {
+      self.convertParsed(result.data[0], result.data[1], result.data[2]);
+    }
+
+    asyncThreadPool.onerror = function(event) {
+      self.onerror({
+        error: event.error,
+        source: origin
+      });
+      self.onloadend({
+        source: origin
+      });
+    };
+
+    var workerTask = new dwv.utils.WorkerTask(
+      dwv.image.decoderScripts['dicom'],
+      {
+        buffer: buffer,
+        origin: origin,
+        dataIndex: dataIndex,
+        defaultCharacterSet: defaultCharacterSet
+      }
+    );
+    asyncThreadPool.addWorkerTask(workerTask);
+  }
+
+  this.convertParsed = function (rawDicomElements, origin, dataIndex) {
+    var dicomElements = new dwv.dicom.DicomElementsWrapper(rawDicomElements);
+    var tmpBuffer = rawDicomElements.x7FE00010.value;
     var pixelBuffer = [];
     for (var frameIndex = 0; frameIndex < tmpBuffer.length; ++frameIndex) {
       pixelBuffer[frameIndex] = [tmpBuffer[frameIndex]];
     }
     var syntax = dwv.dicom.cleanString(
-      dicomParser.getRawDicomElements().x00020010.value[0]);
+      rawDicomElements.x00020010.value[0]);
     var algoName = dwv.dicom.getSyntaxDecompressionName(syntax);
     var needDecompression = (algoName !== null);
 
@@ -82,12 +127,12 @@ dwv.image.DicomBufferToView = function () {
       var imageFactory = new dwv.image.ImageFactory();
       try {
         var image = imageFactory.create(
-          dicomParser.getDicomElements(), pixelBuffer);
+          dicomElements, pixelBuffer);
         // call onload
         self.onloaditem({
           data: {
             image: image,
-            info: dicomParser.getRawDicomElements()
+            info: rawDicomElements
           },
           source: origin
         });
@@ -104,25 +149,25 @@ dwv.image.DicomBufferToView = function () {
 
     if (needDecompression) {
       // gather pixel buffer meta data
-      var bitsAllocated = dicomParser.getRawDicomElements().x00280100.value[0];
+      var bitsAllocated = rawDicomElements.x00280100.value[0];
       var pixelRepresentation =
-        dicomParser.getRawDicomElements().x00280103.value[0];
+        rawDicomElements.x00280103.value[0];
       var pixelMeta = {
         bitsAllocated: bitsAllocated,
         isSigned: (pixelRepresentation === 1)
       };
-      var columnsElement = dicomParser.getRawDicomElements().x00280011;
-      var rowsElement = dicomParser.getRawDicomElements().x00280010;
+      var columnsElement = rawDicomElements.x00280011;
+      var rowsElement = rawDicomElements.x00280010;
       if (typeof columnsElement !== 'undefined' &&
         typeof rowsElement !== 'undefined') {
         pixelMeta.sliceSize = columnsElement.value[0] * rowsElement.value[0];
       }
-      var samplesPerPixelElement = dicomParser.getRawDicomElements().x00280002;
+      var samplesPerPixelElement = rawDicomElements.x00280002;
       if (typeof samplesPerPixelElement !== 'undefined') {
         pixelMeta.samplesPerPixel = samplesPerPixelElement.value[0];
       }
       var planarConfigurationElement =
-        dicomParser.getRawDicomElements().x00280006;
+        rawDicomElements.x00280006;
       if (typeof planarConfigurationElement !== 'undefined') {
         pixelMeta.planarConfiguration = planarConfigurationElement.value[0];
       }
@@ -196,6 +241,9 @@ dwv.image.DicomBufferToView = function () {
     // abort decoding, will trigger pixelDecoder.onabort
     if (pixelDecoder) {
       pixelDecoder.abort();
+    }
+    if (asyncThreadPool) {
+      asyncThreadPool.abort();
     }
   };
 };

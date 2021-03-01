@@ -84,6 +84,21 @@ module.exports = function (grunt) {
             dest: cpTarget + '/node_modules/dwv/dist/<%= pkg.name %>.min.js'
           }
         ]
+      },
+      decoders: {
+        files: [
+          {
+            expand: true,
+            flatten: true,
+            cwd: 'src',
+            src: [
+              'utils/logger.js',
+              'dicom/dicomElementsWrapper.js',
+              'dicom/dicomParser.js'
+            ],
+            dest: 'decoders/dicom/'
+          }
+        ]
       }
     },
     watch: {
@@ -117,6 +132,6 @@ module.exports = function (grunt) {
   grunt.registerTask('lint', ['eslint']);
   grunt.registerTask('test', ['karma:unit']);
   grunt.registerTask('test-ci', ['karma:ci']);
-  grunt.registerTask('build', ['concat', 'uglify']);
+  grunt.registerTask('build', ['concat', 'uglify', 'copy:decoders']);
   grunt.registerTask('dev', ['watch:build']);
 };

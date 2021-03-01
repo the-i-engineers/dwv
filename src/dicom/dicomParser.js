@@ -132,7 +132,7 @@ dwv.dicom.DataReader = function (buffer, isLittleEndian) {
   };
   // Text decoder
   var textDecoder = defaultTextDecoder;
-  if (typeof window.TextDecoder !== 'undefined') {
+  if (typeof window !== 'undefined' && typeof window.TextDecoder !== 'undefined') {
     textDecoder = new TextDecoder('iso-8859-1');
   }
 
@@ -142,7 +142,7 @@ dwv.dicom.DataReader = function (buffer, isLittleEndian) {
    * @param {string} label The encoding label.
    */
   this.setUtfLabel = function (label) {
-    if (typeof window.TextDecoder !== 'undefined') {
+    if (typeof window !== 'undefined' && typeof window.TextDecoder !== 'undefined') {
       textDecoder = new TextDecoder(label);
     }
   };

@@ -12,3 +12,7 @@ package-lock.json
 
 ### IntelliJ IDEA ###
 /.idea/*
+
+/decoders/dicom/dicomElementsWrapper.js
+/decoders/dicom/dicomParser.js
+/decoders/dicom/logger.js
