@@ -1,410 +1,408 @@
 // namespaces
 var dwv = dwv || {};
 dwv.tool = dwv.tool || {};
+dwv.tool.draw = dwv.tool.draw || {};
 /**
  * The Konva namespace.
+ *
  * @external Konva
  * @see https://konvajs.org/
  */
 var Konva = Konva || {};
 
 /**
- * Shape editor.
- * @constructor
+ * Get the default anchor shape.
+ *
+ * @param {number} x The X position.
+ * @param {number} y The Y position.
+ * @param {string} id The shape id.
+ * @param {object} style The application style.
+ * @returns {object} The default anchor shape.
  */
-dwv.tool.ShapeEditor = function (app)
-{
-    /**
-     * Edited shape.
-     * @private
-     * @type Object
-     */
-    var shape = null;
-    /**
-     * Edited image. Used for quantification update.
-     * @private
-     * @type Object
-     */
-    var image = null;
-    /**
-     * Active flag.
-     * @private
-     * @type Boolean
-     */
-    var isActive = false;
-    /**
-     * Update function used by anchors to update the shape.
-     * @private
-     * @type Function
-     */
-    var updateFunction = null;
-    /**
-     * Draw event callback.
-     * @private
-     * @type Function
-     */
-    var drawEventCallback = null;
+dwv.tool.draw.getDefaultAnchor = function (x, y, id, style) {
+  return new Konva.Ellipse({
+    x: x,
+    y: y,
+    stroke: '#999',
+    fill: 'rgba(100,100,100,0.7',
+    strokeWidth: style.getStrokeWidth(),
+    strokeScaleEnabled: false,
+    radius: style.applyZoomScale(3),
+    name: 'anchor',
+    id: id,
+    dragOnTop: false,
+    draggable: true,
+    visible: false
+  });
+};
 
-    /**
-     * Set the shape to edit.
-     * @param {Object} inshape The shape to edit.
-     */
-    this.setShape = function ( inshape ) {
-        shape = inshape;
-        // reset anchors
-        if ( shape ) {
-            removeAnchors();
-            addAnchors();
+/**
+ * Shape editor.
+ *
+ * @param {object} app The associated application.
+ * @class
+ */
+dwv.tool.ShapeEditor = function (app) {
+  /**
+   * Shape factory list
+   *
+   * @type {object}
+   * @private
+   */
+  var shapeFactoryList = null;
+  /**
+   * Current shape factory.
+   *
+   * @type {object}
+   * @private
+   */
+  var currentFactory = null;
+  /**
+   * Edited shape.
+   *
+   * @private
+   * @type {object}
+   */
+  var shape = null;
+  /**
+   * Edited view controller. Used for quantification update.
+   *
+   * @private
+   * @type {object}
+   */
+  var viewController = null;
+  /**
+   * Active flag.
+   *
+   * @private
+   * @type {boolean}
+   */
+  var isActive = false;
+  /**
+   * Draw event callback.
+   *
+   * @private
+   * @type {Function}
+   */
+  var drawEventCallback = null;
+
+  /**
+   * Set the tool options.
+   *
+   * @param {Array} list The list of shape classes.
+   */
+  this.setFactoryList = function (list) {
+    shapeFactoryList = list;
+  };
+
+  /**
+   * Set the shape to edit.
+   *
+   * @param {object} inshape The shape to edit.
+   */
+  this.setShape = function (inshape) {
+    shape = inshape;
+    if (shape) {
+      // remove old anchors
+      removeAnchors();
+      // find a factory for the input shape
+      var group = shape.getParent();
+      var keys = Object.keys(shapeFactoryList);
+      currentFactory = null;
+      for (var i = 0; i < keys.length; ++i) {
+        var factory = new shapeFactoryList[keys[i]];
+        if (factory.isFactoryGroup(group)) {
+          currentFactory = factory;
+          // stop at first find
+          break;
         }
-    };
-
-    /**
-     * Set the associated image.
-     * @param {Object} img The associated image.
-     */
-    this.setImage = function ( img ) {
-        image = img;
-    };
-
-    /**
-     * Get the edited shape.
-     * @return {Object} The edited shape.
-     */
-    this.getShape = function () {
-        return shape;
-    };
-
-    /**
-     * Get the active flag.
-     * @return {Boolean} The active flag.
-     */
-    this.isActive = function () {
-        return isActive;
-    };
-
-    /**
-     * Set the draw event callback.
-     * @param {Object} callback The callback.
-     */
-    this.setDrawEventCallback = function ( callback ) {
-        drawEventCallback = callback;
-    };
-
-    /**
-     * Enable the editor. Redraws the layer.
-     */
-    this.enable = function () {
-        isActive = true;
-        if ( shape ) {
-            setAnchorsVisible( true );
-            if ( shape.getLayer() ) {
-                shape.getLayer().draw();
-            }
-        }
-    };
-
-    /**
-     * Disable the editor. Redraws the layer.
-     */
-    this.disable = function () {
-        isActive = false;
-        if ( shape ) {
-            setAnchorsVisible( false );
-            if ( shape.getLayer() ) {
-                shape.getLayer().draw();
-            }
-        }
-    };
-
-    /**
-     * Reset the anchors.
-     */
-    this.resetAnchors = function () {
-        // remove previous controls
-        removeAnchors();
-        // add anchors
-        addAnchors();
-        // set them visible
-        setAnchorsVisible( true );
-    };
-
-    /**
-     * Apply a function on all anchors.
-     * @param {Object} func A f(shape) function.
-     * @private
-     */
-    function applyFuncToAnchors( func ) {
-        if ( shape && shape.getParent() ) {
-            var anchors = shape.getParent().find('.anchor');
-            anchors.each( func );
-        }
+      }
+      if (currentFactory === null) {
+        throw new Error('Could not find a factory to update shape.');
+      }
+      // add new anchors
+      addAnchors();
     }
+  };
 
-    /**
-     * Set anchors visibility.
-     * @param {Boolean} flag The visible flag.
-     * @private
-     */
-    function setAnchorsVisible( flag ) {
-        applyFuncToAnchors( function (anchor) {
-            anchor.visible( flag );
-        });
+  /**
+   * Set the associated image.
+   *
+   * @param {object} vc The associated view controller.
+   */
+  this.setViewController = function (vc) {
+    viewController = vc;
+  };
+
+  /**
+   * Get the edited shape.
+   *
+   * @returns {object} The edited shape.
+   */
+  this.getShape = function () {
+    return shape;
+  };
+
+  /**
+   * Get the active flag.
+   *
+   * @returns {boolean} The active flag.
+   */
+  this.isActive = function () {
+    return isActive;
+  };
+
+  /**
+   * Set the draw event callback.
+   *
+   * @param {object} callback The callback.
+   */
+  this.setDrawEventCallback = function (callback) {
+    drawEventCallback = callback;
+  };
+
+  /**
+   * Enable the editor. Redraws the layer.
+   */
+  this.enable = function () {
+    isActive = true;
+    if (shape) {
+      setAnchorsVisible(true);
+      if (shape.getLayer()) {
+        shape.getLayer().draw();
+      }
     }
+  };
 
-    /**
-     * Set anchors active.
-     * @param {Boolean} flag The active (on/off) flag.
-     */
-    this.setAnchorsActive = function ( flag ) {
-        var func = null;
-        if ( flag ) {
-            func = function (anchor) {
-                setAnchorOn( anchor );
-            };
-        }
-        else {
-            func = function (anchor) {
-                setAnchorOff( anchor );
-            };
-        }
-        applyFuncToAnchors( func );
+  /**
+   * Disable the editor. Redraws the layer.
+   */
+  this.disable = function () {
+    isActive = false;
+    if (shape) {
+      setAnchorsVisible(false);
+      if (shape.getLayer()) {
+        shape.getLayer().draw();
+      }
+    }
+  };
+
+  /**
+   * Reset the anchors.
+   */
+  this.resetAnchors = function () {
+    // remove previous controls
+    removeAnchors();
+    // add anchors
+    addAnchors();
+    // set them visible
+    setAnchorsVisible(true);
+  };
+
+  /**
+   * Apply a function on all anchors.
+   *
+   * @param {object} func A f(shape) function.
+   * @private
+   */
+  function applyFuncToAnchors(func) {
+    if (shape && shape.getParent()) {
+      var anchors = shape.getParent().find('.anchor');
+      anchors.forEach(func);
+    }
+  }
+
+  /**
+   * Set anchors visibility.
+   *
+   * @param {boolean} flag The visible flag.
+   * @private
+   */
+  function setAnchorsVisible(flag) {
+    applyFuncToAnchors(function (anchor) {
+      anchor.visible(flag);
+    });
+  }
+
+  /**
+   * Set anchors active.
+   *
+   * @param {boolean} flag The active (on/off) flag.
+   */
+  this.setAnchorsActive = function (flag) {
+    var func = null;
+    if (flag) {
+      func = function (anchor) {
+        setAnchorOn(anchor);
+      };
+    } else {
+      func = function (anchor) {
+        setAnchorOff(anchor);
+      };
+    }
+    applyFuncToAnchors(func);
+  };
+
+  /**
+   * Remove anchors.
+   *
+   * @private
+   */
+  function removeAnchors() {
+    applyFuncToAnchors(function (anchor) {
+      anchor.remove();
+    });
+  }
+
+  /**
+   * Add the shape anchors.
+   *
+   * @private
+   */
+  function addAnchors() {
+    // exit if no shape or no layer
+    if (!shape || !shape.getLayer()) {
+      return;
+    }
+    // get shape group
+    var group = shape.getParent();
+
+    // activate and add anchors to group
+    var anchors = currentFactory.getAnchors(shape, app.getStyle());
+    for (var i = 0; i < anchors.length; ++i) {
+      // set anchor on
+      setAnchorOn(anchors[i]);
+      // add the anchor to the group
+      group.add(anchors[i]);
+    }
+  }
+
+  /**
+   * Get a simple clone of the input anchor.
+   *
+   * @param {object} anchor The anchor to clone.
+   * @returns {object} A clone of the input anchor.
+   * @private
+   */
+  function getClone(anchor) {
+    // create closure to properties
+    var parent = anchor.getParent();
+    var id = anchor.id();
+    var x = anchor.x();
+    var y = anchor.y();
+    // create clone object
+    var clone = {};
+    clone.getParent = function () {
+      return parent;
     };
+    clone.id = function () {
+      return id;
+    };
+    clone.x = function () {
+      return x;
+    };
+    clone.y = function () {
+      return y;
+    };
+    return clone;
+  }
 
-    /**
-     * Remove anchors.
-     * @private
-     */
-    function removeAnchors() {
-        applyFuncToAnchors( function (anchor) {
-            anchor.remove();
-        });
-    }
+  /**
+   * Set the anchor on listeners.
+   *
+   * @param {object} anchor The anchor to set on.
+   * @private
+   */
+  function setAnchorOn(anchor) {
+    var startAnchor = null;
 
-    /**
-     * Add the shape anchors.
-     * @private
-     */
-    function addAnchors() {
-        // exit if no shape or no layer
-        if ( !shape || !shape.getLayer() ) {
-            return;
-        }
-        // get shape group
-        var group = shape.getParent();
-        // add shape specific anchors to the shape group
-        if ( shape instanceof Konva.Line ) {
-            var points = shape.points();
+    // command name based on shape type
+    var shapeDisplayName = dwv.tool.GetShapeDisplayName(shape);
 
-            var needsBeginEnd = group.name() === "line-group" ||
-                group.name() === "ruler-group" ||
-                group.name() === "protractor-group";
-            var needsMid = group.name() === "protractor-group";
+    // drag start listener
+    anchor.on('dragstart.edit', function (evt) {
+      startAnchor = getClone(this);
+      // prevent bubbling upwards
+      evt.cancelBubble = true;
+    });
+    // drag move listener
+    anchor.on('dragmove.edit', function (evt) {
+      var layerDetails = dwv.gui.getLayerDetailsFromEvent(evt.evt);
+      var layerGroup = app.getLayerGroupById(layerDetails.groupId);
+      var drawLayer = layerGroup.getActiveDrawLayer();
+      // validate the anchor position
+      dwv.tool.validateAnchorPosition(drawLayer.getBaseSize(), this);
+      // update shape
+      currentFactory.update(this, app.getStyle(), viewController);
+      // redraw
+      if (this.getLayer()) {
+        this.getLayer().draw();
+      } else {
+        dwv.logger.warn('No layer to draw the anchor!');
+      }
+      // prevent bubbling upwards
+      evt.cancelBubble = true;
+    });
+    // drag end listener
+    anchor.on('dragend.edit', function (evt) {
+      var endAnchor = getClone(this);
+      // store the change command
+      var chgcmd = new dwv.tool.ChangeGroupCommand(
+        shapeDisplayName,
+        currentFactory.update,
+        startAnchor,
+        endAnchor,
+        this.getLayer(),
+        viewController,
+        app.getStyle()
+      );
+      chgcmd.onExecute = drawEventCallback;
+      chgcmd.onUndo = drawEventCallback;
+      chgcmd.execute();
+      app.addToUndoStack(chgcmd);
+      // reset start anchor
+      startAnchor = endAnchor;
+      // prevent bubbling upwards
+      evt.cancelBubble = true;
+    });
+    // mouse down listener
+    anchor.on('mousedown touchstart', function () {
+      this.moveToTop();
+    });
+    // mouse over styling
+    anchor.on('mouseover.edit', function () {
+      // style is handled by the group
+      this.stroke('#ddd');
+      if (this.getLayer()) {
+        this.getLayer().draw();
+      } else {
+        dwv.logger.warn('No layer to draw the anchor!');
+      }
+    });
+    // mouse out styling
+    anchor.on('mouseout.edit', function () {
+      // style is handled by the group
+      this.stroke('#999');
+      if (this.getLayer()) {
+        this.getLayer().draw();
+      } else {
+        dwv.logger.warn('No layer to draw the anchor!');
+      }
+    });
+  }
 
-            var px = 0;
-            var py = 0;
-            var name = "";
-            for ( var i = 0; i < points.length; i=i+2 ) {
-                px = points[i] + shape.x();
-                py = points[i+1] + shape.y();
-                name = i;
-                if ( needsBeginEnd ) {
-                    if ( i === 0 ) {
-                        name = "begin";
-                    } else if ( i === points.length - 2 ) {
-                        name = "end";
-                    }
-                }
-                if ( needsMid && i === 2 ) {
-                    name = "mid";
-                }
-                addAnchor(group, px, py, name);
-            }
-
-            if ( group.name() === "line-group" ) {
-                updateFunction = dwv.tool.draw.UpdateArrow;
-            } else if ( group.name() === "ruler-group" ) {
-                updateFunction = dwv.tool.draw.UpdateRuler;
-            } else if ( group.name() === "protractor-group" ) {
-                updateFunction = dwv.tool.draw.UpdateProtractor;
-            } else if ( group.name() === "roi-group" ) {
-                updateFunction = dwv.tool.draw.UpdateRoi;
-            } else if ( group.name() === "freeHand-group" ) {
-                updateFunction = dwv.tool.draw.UpdateFreeHand;
-            } else {
-                console.warn("Cannot update unknown line shape.");
-            }
-        }
-        else if ( shape instanceof Konva.Rect ) {
-            updateFunction = dwv.tool.draw.UpdateRect;
-            var rectX = shape.x();
-            var rectY = shape.y();
-            var rectWidth = shape.width();
-            var rectHeight = shape.height();
-            addAnchor(group, rectX, rectY, 'topLeft');
-            addAnchor(group, rectX+rectWidth, rectY, 'topRight');
-            addAnchor(group, rectX+rectWidth, rectY+rectHeight, 'bottomRight');
-            addAnchor(group, rectX, rectY+rectHeight, 'bottomLeft');
-        }
-        else if ( shape instanceof Konva.Ellipse ) {
-            updateFunction = dwv.tool.draw.UpdateEllipse;
-            var ellipseX = shape.x();
-            var ellipseY = shape.y();
-            var radius = shape.radius();
-            addAnchor(group, ellipseX-radius.x, ellipseY-radius.y, 'topLeft');
-            addAnchor(group, ellipseX+radius.x, ellipseY-radius.y, 'topRight');
-            addAnchor(group, ellipseX+radius.x, ellipseY+radius.y, 'bottomRight');
-            addAnchor(group, ellipseX-radius.x, ellipseY+radius.y, 'bottomLeft');
-        }
-        // add group to layer
-        //shape.getLayer().add( group );
-        //shape.getParent().add( group );
-    }
-
-    /**
-     * Create shape editor controls, i.e. the anchors.
-     * @param {Object} group The group associated with this anchor.
-     * @param {Number} x The X position of the anchor.
-     * @param {Number} y The Y position of the anchor.
-     * @param {Number} id The id of the anchor.
-     * @private
-     */
-    function addAnchor(group, x, y, id) {
-        // anchor shape
-        var anchor = new Konva.Circle({
-            x: x,
-            y: y,
-            stroke: '#999',
-            fill: 'rgba(100,100,100,0.7',
-            strokeWidth: app.getStyle().getScaledStrokeWidth() / app.getScale(),
-            radius: app.getStyle().scale(6) / app.getScale(),
-            name: 'anchor',
-            id: id,
-            dragOnTop: false,
-            draggable: true,
-            visible: false
-        });
-        // set anchor on
-        setAnchorOn( anchor );
-        // add the anchor to the group
-        group.add(anchor);
-    }
-
-    /**
-     * Get a simple clone of the input anchor.
-     * @param {Object} anchor The anchor to clone.
-     * @private
-     */
-    function getClone( anchor ) {
-        // create closure to properties
-        var parent = anchor.getParent();
-        var id = anchor.id();
-        var x = anchor.x();
-        var y = anchor.y();
-        // create clone object
-        var clone = {};
-        clone.getParent = function () {
-            return parent;
-        };
-        clone.id = function () {
-            return id;
-        };
-        clone.x = function () {
-            return x;
-        };
-        clone.y = function () {
-            return y;
-        };
-        return clone;
-    }
-
-    /**
-     * Set the anchor on listeners.
-     * @param {Object} anchor The anchor to set on.
-     * @private
-     */
-    function setAnchorOn( anchor ) {
-        var startAnchor = null;
-
-        // command name based on shape type
-        var shapeDisplayName = dwv.tool.GetShapeDisplayName(shape);
-
-        // drag start listener
-        anchor.on('dragstart.edit', function (evt) {
-            startAnchor = getClone(this);
-            // prevent bubbling upwards
-            evt.cancelBubble = true;
-        });
-        // drag move listener
-        anchor.on('dragmove.edit', function (evt) {
-            // update shape
-            if ( updateFunction ) {
-                updateFunction(this, image);
-            } else {
-                console.warn("No update function!");
-            }
-            // redraw
-            if ( this.getLayer() ) {
-                this.getLayer().draw();
-            } else {
-                console.warn("No layer to draw the anchor!");
-            }
-            // prevent bubbling upwards
-            evt.cancelBubble = true;
-        });
-        // drag end listener
-        anchor.on('dragend.edit', function (evt) {
-            var endAnchor = getClone(this);
-            // store the change command
-            var chgcmd = new dwv.tool.ChangeGroupCommand(
-                    shapeDisplayName, updateFunction, startAnchor, endAnchor, this.getLayer(), image);
-            chgcmd.onExecute = drawEventCallback;
-            chgcmd.onUndo = drawEventCallback;
-            chgcmd.execute();
-            app.addToUndoStack(chgcmd);
-            // reset start anchor
-            startAnchor = endAnchor;
-            // prevent bubbling upwards
-            evt.cancelBubble = true;
-        });
-        // mouse down listener
-        anchor.on('mousedown touchstart', function () {
-            this.moveToTop();
-        });
-        // mouse over styling
-        anchor.on('mouseover.edit', function () {
-            // style is handled by the group
-            this.stroke('#ddd');
-            if ( this.getLayer() ) {
-                this.getLayer().draw();
-            }
-            else {
-                console.warn("No layer to draw the anchor!");
-            }
-        });
-        // mouse out styling
-        anchor.on('mouseout.edit', function () {
-            // style is handled by the group
-            this.stroke('#999');
-            if ( this.getLayer() ) {
-                this.getLayer().draw();
-            }
-            else {
-                console.warn("No layer to draw the anchor!");
-            }
-        });
-    }
-
-    /**
-     * Set the anchor off listeners.
-     * @param {Object} anchor The anchor to set off.
-     * @private
-     */
-    function setAnchorOff( anchor ) {
-        anchor.off('dragstart.edit');
-        anchor.off('dragmove.edit');
-        anchor.off('dragend.edit');
-        anchor.off('mousedown touchstart');
-        anchor.off('mouseover.edit');
-        anchor.off('mouseout.edit');
-    }
+  /**
+   * Set the anchor off listeners.
+   *
+   * @param {object} anchor The anchor to set off.
+   * @private
+   */
+  function setAnchorOff(anchor) {
+    anchor.off('dragstart.edit');
+    anchor.off('dragmove.edit');
+    anchor.off('dragend.edit');
+    anchor.off('mousedown touchstart');
+    anchor.off('mouseover.edit');
+    anchor.off('mouseout.edit');
+  }
 };
