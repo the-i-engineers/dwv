@@ -94,7 +94,8 @@ module.exports = function (grunt) {
             src: [
               'utils/logger.js',
               'dicom/dicomElementsWrapper.js',
-              'dicom/dicomParser.js'
+              'dicom/dicomParser.js',
+              'dicom/dictionary.js'
             ],
             dest: 'decoders/dicom/'
           }

@@ -1,4 +1,4 @@
-importScripts('dicomElementsWrapper.js', 'dicomParser.js', 'logger.js');
+importScripts('dicomElementsWrapper.js', 'dicomParser.js', 'logger.js', 'dictionary.js');
 
 self.addEventListener('message', function (event) {
     var dicomParser = new dwv.dicom.DicomParser();
